@@ -619,6 +619,21 @@ import { FaceLandmarker, FilesetResolver, DrawingUtils } from
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
+const PUSH_WORKER_URL = String.fromCharCode(104,116,116,112,115,58,47,47,101,108,117,109,101,45,110,111,116,105,102,105,99,97,116,105,111,110,115,46,101,108,109,111,114,105,99,104,97,114,100,112,101,114,101,105,114,97,100,105,103,105,116,97,108,46,119,111,114,107,101,114,115,46,100,101,118);
+
+// ─── PUSH NOTIFICATION HELPERS ───────────────────────────────────────────────
+function getOrCreateUserId() {
+  let id = localStorage.getItem('elume_user_id');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('elume_user_id', id); }
+  return id;
+}
+
+function urlBase64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
 const API_BASE = String.fromCharCode(104,116,116,112,115,58,47,47,100,97,116,97,45,115,105,108,105,99,111,110,45,115,116,117,100,105,111,46,110,103,114,111,107,45,102,114,101,101,46,100,101,118);
 const STYLES   = ['natural waves','sleek straight','voluminous curls','textured bob',
                   'layered shag','bixie cut','french girl','beach blowout'];
@@ -1266,25 +1281,7 @@ function showBadgeUnlock(b) {
 }
 
 // ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
-async function scheduleNotifications() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  if (!('serviceWorker' in navigator)) return;
-  const reg = await navigator.serviceWorker.ready;
-  BASE_TASKS.filter(t => isTaskDueToday(t)).forEach((task, i) => {
-    const delay = (task.notif * 60 - new Date().getHours() * 60 - new Date().getMinutes()) * 60000;
-    if (delay > 0) {
-      setTimeout(() => {
-        reg.showNotification('ÉLUME · ' + task.name, {
-          body: `Time for your ${task.name.toLowerCase()} — +${task.pts} XP`,
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: task.id,
-        });
-      }, delay);
-    }
-  });
-}
+// scheduleNotifications removed — replaced by Cloudflare Worker push (PUSH_WORKER_URL)
 
 // ─── PUBLIC API (window.App) ──────────────────────────────────────────────────
 const App = {
@@ -1330,7 +1327,7 @@ const App = {
 
     try {
       const form = new FormData();
-      form.append('image', State.capturedBlob, 'photo.jpg');
+      form.append('file', State.capturedBlob, 'photo.jpg');
 
       const res  = await fetch(API_BASE + '/analyze', { method:'POST', body:form });
       const data = await res.json();
@@ -1408,7 +1405,7 @@ const App = {
     document.getElementById('style-loading').classList.add('show');
     try {
       const form = new FormData();
-      form.append('image', State.capturedBlob, 'photo.jpg');
+      form.append('file', State.capturedBlob, 'photo.jpg');
       form.append('style', style);
       const res  = await fetch(API_BASE + '/inpaint', { method:'POST', body:form });
       const data = await res.json();
@@ -1473,14 +1470,35 @@ const App = {
   },
 
   async requestNotifications() {
-    if (!('Notification' in window)) { App.toast('Notifications not supported'); return; }
+    if (!('Notification' in window)) { App.toast('Notifications not supported on this browser'); return; }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      App.toast('Install the app first, then enable reminders'); return;
+    }
     const perm = await Notification.requestPermission();
-    if (perm === 'granted') {
-      scheduleNotifications();
+    if (perm !== 'granted') { App.toast('Enable notifications in your phone settings'); return; }
+    try {
+      const keyRes  = await fetch(PUSH_WORKER_URL + '/vapid-public');
+      const keyData = await keyRes.json();
+      const vapidKey = urlBase64ToUint8Array(keyData.publicKey);
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:vapidKey });
+      const subJSON = sub.toJSON();
+      const userId  = getOrCreateUserId();
+      await fetch(PUSH_WORKER_URL + '/subscribe', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          user_id:  userId,
+          endpoint: subJSON.endpoint,
+          p256dh:   subJSON.keys.p256dh,
+          auth:     subJSON.keys.auth,
+          hair_type: State.apiResult?.hair_type || null,
+        }),
+      });
       App.toast('Reminders enabled ✦');
       document.getElementById('notif-banner').classList.add('hide');
-    } else {
-      App.toast('Permission denied in system settings');
+    } catch(err) {
+      console.error('Push subscribe failed:', err);
+      App.toast('Could not enable notifications — try reinstalling the app');
     }
   },
 
@@ -1558,4 +1576,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-HTMLEOF
