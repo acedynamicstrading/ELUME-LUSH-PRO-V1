@@ -1361,19 +1361,19 @@ const App = {
     document.getElementById('tab-tryon').classList.add('active');
 
     const d = State.apiResult;
-    document.getElementById('res-style-name').textContent = d.recommended_style || STYLES[0];
-    document.getElementById('a-shape').textContent  = d.face_shape  || '—';
-    document.getElementById('a-skin').textContent   = d.skin_tone   || '—';
-    document.getElementById('a-color').textContent  = d.hair_color  || '—';
-    document.getElementById('a-length').textContent = d.hair_length || '—';
-    document.getElementById('a-reason').textContent = d.reason      || 'Style selected based on your facial proportions and features.';
+    document.getElementById('res-style-name').textContent = (d.recommended_styles && d.recommended_styles[0]) || STYLES[0];
+    document.getElementById('a-shape').textContent  = d.face_shape          || '—';
+    document.getElementById('a-skin').textContent   = d.skin_tone           || '—';
+    document.getElementById('a-color').textContent  = d.current_hair_color  || '—';
+    document.getElementById('a-length').textContent = d.current_hair_length || '—';
+    document.getElementById('a-reason').textContent = d.style_reasoning     || 'Style selected based on your facial proportions and features.';
     document.getElementById('cmp-before').src = State.capturedDataURL;
     document.getElementById('cmp-after').src  = d.result_image || '';
 
     // chips
     const chipsEl = document.getElementById('style-chips');
     chipsEl.innerHTML = '';
-    const styles = d.styles || STYLES;
+    const styles = d.recommended_styles || STYLES;
     styles.forEach((s, i) => {
       const chip = document.createElement('div');
       chip.className = 'chip' + (i === 0 ? ' active' : '');
