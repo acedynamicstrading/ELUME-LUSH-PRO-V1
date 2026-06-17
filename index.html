@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ÉLUME">
+  <meta name="theme-color" content="#080604">
+  <title>ÉLUME</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --gold:   #c9a84c;
+      --gold-d: rgba(201,168,76,0.22);
+      --gold-g: rgba(201,168,76,0.55);
+      --bg:     #080604;
+      --s1:     #111009;
+      --s2:     #1c1810;
+      --s3:     #242016;
+      --text:   #f0ead8;
+      --dim:    #7a7060;
+      --danger: #d96060;
+      --ok:     #5aaa7a;
+      --sab:    env(safe-area-inset-bottom, 0px);
+      --sat:    env(safe-area-inset-top, 0px);
+      --sal:    env(safe-area-inset-left, 0px);
+      --sar:    env(safe-area-inset-right, 0px);
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif;
+      -webkit-font-smoothing:antialiased; }
+
+    /* ── Screens ── */
+    .screen { position:absolute; inset:0; display:flex; flex-direction:column;
+      opacity:0; pointer-events:none; transition:opacity .3s ease; }
+    .screen.active { opacity:1; pointer-events:all; }
+
+    /* ── Bottom Nav ── */
+    .bnav {
+      position:fixed; bottom:0; left:0; right:0; z-index:50;
+      display:none; align-items:center; justify-content:space-around;
+      padding:10px 0 calc(10px + var(--sab));
+      background:rgba(8,6,4,.95); backdrop-filter:blur(24px);
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+    body.show-nav .bnav { display:flex; }
+    .bnav-tab {
+      flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+      cursor:pointer; padding:4px 0; opacity:.38; transition:opacity .2s;
+    }
+    .bnav-tab.active { opacity:1; }
+    .bnav-icon { font-size:22px; color:var(--dim); transition:color .2s; }
+    .bnav-label { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); transition:color .2s; }
+    .bnav-tab.active .bnav-icon, .bnav-tab.active .bnav-label { color:var(--gold); }
+
+    /* ══════════ WELCOME ══════════ */
+    #s-welcome { align-items:center; justify-content:center; gap:26px; padding:40px 36px; }
+    .wlc-logo { font-size:52px; font-weight:100; letter-spacing:18px; color:var(--gold);
+      text-shadow:0 0 80px rgba(201,168,76,.2); }
+    .wlc-sub { font-size:10px; letter-spacing:7px; color:var(--dim); text-transform:uppercase; margin-top:-14px; }
+    .wlc-rule { width:36px; height:1px; background:var(--gold); opacity:.45; }
+    .wlc-desc { text-align:center; font-size:14px; line-height:1.8; color:var(--dim); max-width:270px; }
+    .btn-gold { background:var(--gold); color:#000; font-size:12px; font-weight:700; letter-spacing:3px;
+      text-transform:uppercase; border:none; border-radius:2px; padding:16px 44px; cursor:pointer;
+      width:100%; max-width:280px; transition:opacity .2s; }
+    .btn-gold:active { opacity:.82; }
+    .btn-ghost { background:transparent; color:var(--dim); font-size:11px; letter-spacing:2px;
+      text-transform:uppercase; border:1px solid var(--s2); border-radius:2px;
+      padding:13px 44px; cursor:pointer; width:100%; max-width:280px; }
+    #file-input { display:none; }
+    .btn-install { display:none; align-items:center; justify-content:center; gap:8px;
+      background:transparent; color:var(--gold); font-size:11px; letter-spacing:2px;
+      text-transform:uppercase; border:1px solid var(--gold-d); border-radius:2px;
+      padding:13px 44px; cursor:pointer; width:100%; max-width:280px; transition:opacity .2s; }
+    .btn-install.show { display:flex; }
+    .btn-install:active { opacity:.75; }
+    .ios-tip { display:none; align-items:center; gap:10px; background:rgba(201,168,76,.07);
+      border:1px solid var(--gold-d); border-radius:10px; padding:12px 16px;
+      max-width:280px; width:100%; }
+    .ios-tip.show { display:flex; }
+    .ios-tip-text { font-size:11px; color:var(--dim); line-height:1.6; }
+    .ios-tip-text strong { color:var(--gold); display:block; margin-bottom:2px; }
+
+    /* ══════════ CAMERA ══════════ */
+    #s-camera { background:#000; padding-bottom:calc(64px + var(--sab)); }
+    .cam-wrap { position:relative; flex:1; overflow:hidden; }
+    #video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+    #overlay-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+    .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%);
+      width:64%; aspect-ratio:3/4.2; border:1.5px solid rgba(201,168,76,.2); border-radius:50%;
+      transition:border-color .3s, box-shadow .3s; pointer-events:none; }
+    .face-oval.ready { border-color:var(--gold); animation:oval-pulse .9s ease-in-out infinite; }
+    @keyframes oval-pulse {
+      0%,100% { box-shadow:0 0 0 0 var(--gold-g); }
+      50% { box-shadow:0 0 0 22px rgba(201,168,76,0); }
+    }
+    .cam-top { position:absolute; top:0; left:0; right:0; z-index:20;
+      padding:calc(14px + var(--sat)) 18px 18px;
+      background:linear-gradient(to bottom, rgba(0,0,0,.75) 0%, transparent 100%);
+      display:flex; align-items:center; justify-content:space-between; }
+    .cam-brand { font-size:17px; font-weight:100; letter-spacing:9px; color:var(--gold); }
+    .checklist { position:absolute; top:50%; right:12px; transform:translateY(-50%); z-index:20;
+      display:flex; flex-direction:column; gap:6px; }
+    .chk { display:flex; align-items:center; gap:6px; background:rgba(0,0,0,.6);
+      backdrop-filter:blur(10px); border-radius:20px; padding:5px 10px; font-size:11px;
+      color:var(--dim); border:1px solid rgba(255,255,255,.06); transition:color .25s, border-color .25s; }
+    .chk.ok   { color:var(--gold);   border-color:rgba(201,168,76,.35); }
+    .chk.fail { color:var(--danger); border-color:rgba(217,96,96,.35); }
+    .chk-dot  { width:5px; height:5px; border-radius:50%; background:currentColor; flex-shrink:0; }
+    .arrows { position:absolute; inset:0; pointer-events:none; z-index:15; }
+    .arr { position:absolute; color:var(--gold); font-size:30px; opacity:0; transition:opacity .25s;
+      text-shadow:0 0 24px var(--gold-g); animation:arr-y .7s ease-in-out infinite alternate; }
+    .arr.show { opacity:1; }
+    .arr.up    { top:88px;    left:50%; transform:translateX(-50%); }
+    .arr.down  { bottom:80px; left:50%; transform:translateX(-50%); }
+    .arr.left  { left:16px;   top:50%; transform:translateY(-50%); animation:arr-x .7s ease-in-out infinite alternate; }
+    .arr.right { right:16px;  top:50%; transform:translateY(-50%); animation:arr-x .7s ease-in-out infinite alternate; }
+    @keyframes arr-y { from { transform:translateX(-50%) translateY(0); } to { transform:translateX(-50%) translateY(-9px); } }
+    @keyframes arr-x { from { transform:translateY(-50%) translateX(0); } to { transform:translateY(-50%) translateX(-9px); } }
+    .guide-pill { position:absolute; bottom:80px; left:18px; right:18px; z-index:20; text-align:center;
+      background:rgba(0,0,0,.65); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; padding:12px 16px; font-size:14px; font-weight:500; color:var(--text);
+      transition:color .25s, border-color .25s; }
+    .guide-pill.warn  { color:#ff8888; border-color:rgba(217,96,96,.4); }
+    .guide-pill.ready { color:var(--gold); border-color:var(--gold-d); }
+    .countdown { position:absolute; inset:0; z-index:30; display:flex; align-items:center;
+      justify-content:center; flex-direction:column; pointer-events:none; opacity:0; transition:opacity .15s; }
+    .countdown.show { opacity:1; }
+    .cnt-num { font-size:130px; font-weight:100; color:var(--gold);
+      text-shadow:0 0 80px rgba(201,168,76,.9); animation:cnt-pop .85s ease-out forwards; }
+    @keyframes cnt-pop { 0%{transform:scale(1.5);opacity:0} 18%{transform:scale(1);opacity:1} 80%{opacity:1} 100%{opacity:0;transform:scale(.9)} }
+    .cnt-cheese { font-size:28px; letter-spacing:6px; color:var(--gold); font-weight:100; }
+    .cam-bottom { position:absolute; bottom:0; left:0; right:0;
+      padding:16px 28px calc(16px + var(--sab));
+      background:rgba(0,0,0,.88); backdrop-filter:blur(20px);
+      display:flex; align-items:center; justify-content:space-between; }
+    .btn-icon { width:50px; height:50px; border-radius:14px; background:var(--s2);
+      border:1px solid rgba(255,255,255,.07); color:var(--dim); font-size:20px;
+      display:flex; align-items:center; justify-content:center; cursor:pointer; }
+    .btn-shutter { width:72px; height:72px; border-radius:50%; background:transparent;
+      border:2.5px solid rgba(201,168,76,.4); position:relative; cursor:pointer; transition:border-color .3s; }
+    .btn-shutter::after { content:''; position:absolute; width:58px; height:58px; border-radius:50%;
+      top:50%; left:50%; transform:translate(-50%,-50%); background:var(--gold); opacity:.12; transition:opacity .3s; }
+    .btn-shutter.ready { border-color:var(--gold); }
+    .btn-shutter.ready::after { opacity:.25; }
+    .btn-shutter:active::after { opacity:.5 !important; }
+
+    /* ══════════ PROCESSING ══════════ */
+    #s-processing { align-items:center; justify-content:center; gap:24px; padding:48px 36px; }
+    .proc-preview { width:130px; height:165px; object-fit:cover; border-radius:10px;
+      border:1px solid var(--s2); opacity:.85; }
+    .proc-logo { font-size:28px; font-weight:100; letter-spacing:12px; color:var(--gold); }
+    .spinner { width:30px; height:30px; border:1.5px solid var(--s2); border-top-color:var(--gold);
+      border-radius:50%; animation:spin .75s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .proc-stage { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); text-align:center; }
+    .prog-track { width:180px; height:1px; background:var(--s2); border-radius:1px; overflow:hidden; }
+    .prog-fill { height:100%; background:var(--gold); border-radius:1px; transition:width .5s ease; width:0%; }
+
+    /* ══════════ RESULTS ══════════ */
+    #s-results { overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(88px + var(--sab)); }
+    .res-header { padding:calc(22px + var(--sat)) 22px 18px;
+      background:linear-gradient(to bottom, var(--s1) 0%, transparent 100%);
+      display:flex; align-items:flex-start; justify-content:space-between; }
+    .res-eyebrow { font-size:10px; letter-spacing:5px; color:var(--dim); text-transform:uppercase; }
+    .res-style { font-size:26px; font-weight:100; color:var(--gold); letter-spacing:2px; margin-top:3px; }
+    .btn-sm { background:transparent; border:1px solid var(--s2); border-radius:20px;
+      padding:7px 14px; color:var(--dim); font-size:11px; letter-spacing:1px; cursor:pointer;
+      white-space:nowrap; margin-top:4px; }
+    .chips-row { display:flex; gap:8px; padding:0 22px 2px; overflow-x:auto;
+      -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .chips-row::-webkit-scrollbar { display:none; }
+    .chip { flex-shrink:0; background:var(--s2); border:1px solid rgba(201,168,76,.18);
+      border-radius:20px; padding:7px 14px; font-size:11px; letter-spacing:1px; color:var(--dim);
+      cursor:pointer; transition:all .2s; white-space:nowrap; text-transform:capitalize; }
+    .chip.active { background:rgba(201,168,76,.12); border-color:var(--gold); color:var(--gold); }
+    .cmp-labels { display:flex; justify-content:space-between; padding:12px 22px 6px;
+      font-size:10px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; }
+    .cmp-wrap { padding:0 22px; }
+    .cmp-container { position:relative; border-radius:12px; overflow:hidden; aspect-ratio:3/4; background:var(--s1); }
+    .cmp-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .cmp-after { clip-path:inset(0 50% 0 0); }
+    .cmp-slider { position:absolute; top:0; bottom:0; left:50%; width:2px;
+      background:rgba(255,255,255,.9); cursor:ew-resize; z-index:10; transform:translateX(-50%); }
+    .cmp-handle { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:38px; height:38px; border-radius:50%; background:#fff;
+      border:2px solid rgba(0,0,0,.15); display:flex; align-items:center;
+      justify-content:center; font-size:15px; user-select:none; color:#333;
+      box-shadow:0 2px 12px rgba(0,0,0,.35); }
+    .style-loading { position:absolute; inset:0; z-index:5; background:rgba(8,6,4,.7);
+      backdrop-filter:blur(4px); border-radius:12px; display:none;
+      align-items:center; justify-content:center; }
+    .style-loading.show { display:flex; }
+    .analysis { margin:14px 22px; background:var(--s1); border-radius:12px;
+      border:1px solid rgba(201,168,76,.12); padding:18px; }
+    .a-label { font-size:9px; letter-spacing:5px; color:var(--gold); text-transform:uppercase; margin-bottom:14px; }
+    .a-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px 8px; margin-bottom:14px; }
+    .a-key { font-size:9px; letter-spacing:2px; color:var(--dim); text-transform:uppercase; margin-bottom:3px; }
+    .a-val { font-size:13px; color:var(--text); font-weight:500; text-transform:capitalize; }
+    .a-rule { height:1px; background:rgba(255,255,255,.05); margin:3px 0 12px; }
+    .a-reason { font-size:13px; line-height:1.75; color:var(--dim); }
+    .res-actions { padding:16px 22px 8px; display:flex; flex-direction:column; gap:10px; }
+    .btn-save { background:var(--gold); color:#000; font-size:12px; font-weight:700;
+      letter-spacing:2px; text-transform:uppercase; border:none; border-radius:3px;
+      padding:15px; cursor:pointer; width:100%; }
+    .btn-routine-cta { background:rgba(201,168,76,.1); color:var(--gold);
+      font-size:12px; letter-spacing:2px; text-transform:uppercase;
+      border:1px solid var(--gold-d); border-radius:3px; padding:13px; cursor:pointer; width:100%; }
+
+    /* ══════════ ROUTINE ══════════ */
+    #s-routine { overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(88px + var(--sab)); }
+    .rtn-header { padding:calc(20px + var(--sat)) 22px 16px;
+      background:linear-gradient(to bottom, var(--s1) 0%, transparent 100%); }
+    .rtn-eyebrow { font-size:10px; letter-spacing:5px; color:var(--dim); text-transform:uppercase; }
+    .rtn-title { font-size:26px; font-weight:100; color:var(--gold); letter-spacing:2px; margin-top:2px; }
+
+    /* Score gauge */
+    .gauge-wrap { display:flex; flex-direction:column; align-items:center; padding:8px 22px 0; }
+    .gauge-card { background:var(--s1); border-radius:16px; border:1px solid rgba(201,168,76,.12);
+      padding:24px; width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; }
+    .gauge-svg { width:200px; height:110px; overflow:visible; }
+    .gauge-track { fill:none; stroke:var(--s2); stroke-width:14; stroke-linecap:round; }
+    .gauge-fill { fill:none; stroke:var(--gold); stroke-width:14; stroke-linecap:round;
+      stroke-dasharray:220; stroke-dashoffset:220; transition:stroke-dashoffset 1.2s ease, stroke .5s; }
+    .gauge-fill.amber { stroke:#e8a030; }
+    .gauge-fill.low   { stroke:#c06040; }
+    .gauge-num { font-size:38px; font-weight:100; fill:var(--gold); text-anchor:middle; dominant-baseline:middle; }
+    .gauge-tag { font-size:9px; fill:var(--dim); text-anchor:middle; letter-spacing:3px; }
+    .streak-row { display:flex; gap:10px; width:100%; justify-content:center; }
+    .streak-box { flex:1; background:var(--s2); border-radius:10px; padding:12px; text-align:center;
+      border:1px solid rgba(255,255,255,.05); }
+    .streak-num   { font-size:22px; font-weight:100; color:var(--gold); }
+    .streak-label { font-size:9px; letter-spacing:2px; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+
+    /* Section heads and tasks */
+    .section-head { display:flex; align-items:center; justify-content:space-between; padding:20px 22px 10px; }
+    .section-title { font-size:10px; letter-spacing:4px; color:var(--dim); text-transform:uppercase; }
+    .task-list { display:flex; flex-direction:column; gap:8px; padding:0 22px; }
+    .task-card { display:flex; align-items:center; gap:14px; background:var(--s1); border-radius:12px;
+      padding:14px 16px; border:1px solid rgba(255,255,255,.05); cursor:pointer;
+      transition:border-color .25s, transform .15s; position:relative; overflow:hidden; }
+    .task-card:active { transform:scale(.985); }
+    .task-card.done   { opacity:.55; border-color:rgba(201,168,76,.2); }
+    .task-card.overdue { border-color:rgba(217,96,96,.3); }
+    .task-card.due     { border-color:rgba(201,168,76,.3); }
+    .task-ico { width:40px; height:40px; border-radius:10px; background:var(--s2);
+      display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+    .task-ico.done-ico { background:rgba(201,168,76,.15); }
+    .task-body { flex:1; min-width:0; }
+    .task-name { font-size:14px; color:var(--text); font-weight:500; }
+    .task-card.done .task-name { text-decoration:line-through; color:var(--dim); }
+    .task-meta { font-size:11px; color:var(--dim); margin-top:2px; }
+    .task-meta.overdue { color:var(--danger); }
+    .task-meta.due     { color:var(--gold); }
+    .task-check { width:24px; height:24px; border-radius:50%; border:1.5px solid var(--s2);
+      flex-shrink:0; display:flex; align-items:center; justify-content:center;
+      font-size:13px; transition:all .25s; }
+    .task-card.done .task-check { background:var(--gold); border-color:var(--gold); color:#000; }
+    .task-pts { font-size:12px; font-weight:700; color:var(--gold); position:absolute; right:18px;
+      pointer-events:none; opacity:0; animation:pts-pop .7s ease-out forwards; }
+    @keyframes pts-pop { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-32px)} }
+
+    /* Notif banner */
+    .notif-banner { margin:12px 22px 0; background:rgba(201,168,76,.07);
+      border:1px solid var(--gold-d); border-radius:12px; padding:14px 16px;
+      display:flex; align-items:center; gap:12px; cursor:pointer; }
+    .notif-banner.hide { display:none; }
+    .notif-text { flex:1; font-size:12px; color:var(--dim); line-height:1.5; }
+    .notif-text strong { color:var(--gold); display:block; margin-bottom:2px; font-size:13px; }
+    .btn-notif { background:var(--gold); color:#000; font-size:10px; font-weight:700;
+      letter-spacing:1px; border:none; border-radius:20px; padding:7px 14px; cursor:pointer; white-space:nowrap; }
+
+    /* Salon booking card */
+    .salon-card { margin:14px 22px; background:var(--s1); border-radius:12px;
+      border:1px solid rgba(201,168,76,.12); padding:18px;
+      display:flex; align-items:center; gap:14px; cursor:pointer; }
+    .salon-ico { width:44px; height:44px; border-radius:12px; background:rgba(201,168,76,.1);
+      display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+    .salon-body { flex:1; }
+    .salon-title { font-size:14px; color:var(--text); font-weight:500; }
+    .salon-sub   { font-size:11px; color:var(--dim); margin-top:2px; }
+    .salon-arrow { color:var(--gold); font-size:18px; }
+
+    /* Insight tip */
+    .tip-card { margin:0 22px 14px; background:var(--s2); border-radius:12px;
+      border:1px solid rgba(255,255,255,.05); padding:14px 16px;
+      display:flex; align-items:flex-start; gap:12px; }
+    .tip-ico  { font-size:18px; flex-shrink:0; margin-top:1px; }
+    .tip-text { font-size:12px; color:var(--dim); line-height:1.65; }
+    .tip-text strong { color:var(--text); display:block; margin-bottom:3px; font-size:13px; }
+
+    /* Empty state */
+    .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:60px 36px; gap:16px; text-align:center; }
+    .empty-ico { font-size:48px; opacity:.35; }
+    .empty-title { font-size:18px; font-weight:100; color:var(--dim); letter-spacing:2px; }
+    .empty-sub { font-size:13px; color:var(--dim); line-height:1.7; max-width:240px; opacity:.7; }
+
+    /* ══════════ BADGES ══════════ */
+    #s-badges { overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(88px + var(--sab)); }
+    .bdg-header { padding:calc(20px + var(--sat)) 22px 16px;
+      background:linear-gradient(to bottom, var(--s1) 0%, transparent 100%); }
+    .bdg-eyebrow { font-size:10px; letter-spacing:5px; color:var(--dim); text-transform:uppercase; }
+    .bdg-title   { font-size:26px; font-weight:100; color:var(--gold); letter-spacing:2px; margin-top:2px; }
+    .bdg-count   { font-size:12px; color:var(--dim); margin-top:4px; }
+
+    /* Level bar */
+    .level-bar { margin:0 22px 16px; background:var(--s1); border-radius:12px;
+      border:1px solid rgba(201,168,76,.12); padding:16px 18px; }
+    .level-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .level-name { font-size:13px; color:var(--gold); font-weight:500; }
+    .level-xp   { font-size:11px; color:var(--dim); }
+    .level-track { height:3px; background:var(--s2); border-radius:2px; overflow:hidden; }
+    .level-fill  { height:100%; background:var(--gold); border-radius:2px; transition:width 1s ease; }
+
+    .bdg-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:4px 22px 20px; }
+    .bdg-card { background:var(--s1); border-radius:14px; padding:20px 14px;
+      text-align:center; border:1px solid rgba(255,255,255,.05);
+      transition:all .3s; opacity:.3; filter:grayscale(1); }
+    .bdg-card.earned { opacity:1; filter:none; border-color:rgba(201,168,76,.25);
+      box-shadow:0 0 20px rgba(201,168,76,.07); }
+    .bdg-icon { font-size:36px; margin-bottom:8px; }
+    .bdg-name { font-size:12px; font-weight:600; color:var(--dim); margin-bottom:4px; }
+    .bdg-card.earned .bdg-name { color:var(--gold); }
+    .bdg-desc { font-size:10px; color:var(--dim); line-height:1.5; }
+    .bdg-card.earned .bdg-desc { color:var(--dim); }
+    .bdg-date { font-size:9px; color:var(--gold); margin-top:6px; opacity:.7; letter-spacing:1px; }
+
+    /* ══════════ TOAST ══════════ */
+    .toast { position:fixed; bottom:calc(90px + var(--sab)); left:50%; transform:translateX(-50%);
+      background:rgba(8,6,4,.94); backdrop-filter:blur(16px);
+      border:1px solid rgba(255,255,255,.1); border-radius:20px;
+      color:var(--text); font-size:13px; padding:11px 20px; z-index:200;
+      opacity:0; pointer-events:none; transition:opacity .3s; white-space:nowrap; }
+    .toast.show { opacity:1; }
+
+    /* Celebrate flash */
+    .celebrate { position:fixed; inset:0; z-index:100; pointer-events:none;
+      background:rgba(201,168,76,.1); opacity:0; }
+    .celebrate.pop { animation:cel .55s ease-out; }
+    @keyframes cel { 0%{opacity:1} 100%{opacity:0} }
+
+    /* Badge unlock overlay */
+    .bdg-unlock { position:fixed; inset:0; z-index:150; display:flex; align-items:center;
+      justify-content:center; background:rgba(0,0,0,.75); backdrop-filter:blur(12px);
+      opacity:0; pointer-events:none; transition:opacity .3s; }
+    .bdg-unlock.show { opacity:1; pointer-events:all; }
+    .bdg-unlock-card { background:var(--s1); border:1px solid rgba(201,168,76,.3);
+      border-radius:20px; padding:36px 32px; text-align:center; max-width:260px;
+      animation:bdg-in .4s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes bdg-in { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+    .bdg-unlock-ico  { font-size:64px; margin-bottom:12px; }
+    .bdg-unlock-eyebrow { font-size:9px; letter-spacing:5px; color:var(--gold); text-transform:uppercase; margin-bottom:8px; }
+    .bdg-unlock-name { font-size:22px; font-weight:100; color:var(--text); letter-spacing:2px; margin-bottom:8px; }
+    .bdg-unlock-desc { font-size:13px; color:var(--dim); line-height:1.6; margin-bottom:20px; }
+    .bdg-unlock-close { background:var(--gold); color:#000; font-size:11px; font-weight:700;
+      letter-spacing:2px; text-transform:uppercase; border:none; border-radius:2px;
+      padding:13px 32px; cursor:pointer; width:100%; }
+  </style>
+</head>
+<body>
+
+<!-- ══ WELCOME ══ -->
+<div id="s-welcome" class="screen active">
+  <div class="wlc-logo">ÉLUME</div>
+  <div class="wlc-sub">AI Hair Try-On</div>
+  <div class="wlc-rule"></div>
+  <p class="wlc-desc">Your face, your style. AI analyses your unique features and shows hairstyles made for you — before you commit to them.</p>
+  <button class="btn-gold" onclick="App.startCamera()">Start</button>
+  <button class="btn-ghost" onclick="document.getElementById('file-input').click()">Upload Photo</button>
+  <input type="file" id="file-input" accept="image/*" onchange="App.handleUpload(event)">
+  <button class="btn-install" id="btn-install" onclick="App.installPWA()">⬇ Install App</button>
+  <div class="ios-tip" id="ios-tip">
+    <div style="font-size:22px">📲</div>
+    <div class="ios-tip-text"><strong>Install ÉLUME</strong>Tap the Share button below, then "Add to Home Screen".</div>
+  </div>
+</div>
+
+<!-- ══ CAMERA ══ -->
+<div id="s-camera" class="screen">
+  <div class="cam-wrap">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay-canvas"></canvas>
+    <div class="face-oval" id="face-oval"></div>
+
+    <!-- directional arrows -->
+    <div class="arrows">
+      <div class="arr up"    id="arr-up">↑</div>
+      <div class="arr down"  id="arr-down">↓</div>
+      <div class="arr left"  id="arr-left">←</div>
+      <div class="arr right" id="arr-right">→</div>
+    </div>
+
+    <!-- top bar -->
+    <div class="cam-top">
+      <span class="cam-brand">ÉLUME</span>
+      <div class="btn-icon" onclick="App.switchCamera()" style="width:38px;height:38px;font-size:16px">⟳</div>
+    </div>
+
+    <!-- checklist -->
+    <div class="checklist">
+      <div class="chk" id="chk-face"><div class="chk-dot"></div>Face</div>
+      <div class="chk" id="chk-center"><div class="chk-dot"></div>Centred</div>
+      <div class="chk" id="chk-dist"><div class="chk-dot"></div>Distance</div>
+      <div class="chk" id="chk-level"><div class="chk-dot"></div>Level</div>
+      <div class="chk" id="chk-light"><div class="chk-dot"></div>Lighting</div>
+      <div class="chk" id="chk-hair"><div class="chk-dot"></div>Hair clear</div>
+    </div>
+
+    <!-- guide pill -->
+    <div class="guide-pill" id="guide-pill">Position your face in the oval</div>
+
+    <!-- countdown -->
+    <div class="countdown" id="countdown">
+      <div class="cnt-num" id="cnt-num"></div>
+      <div class="cnt-cheese" id="cnt-cheese"></div>
+    </div>
+  </div>
+
+  <div class="cam-bottom">
+    <div class="btn-icon" onclick="document.getElementById('file-input').click()">🖼</div>
+    <button class="btn-shutter" id="btn-shutter" onclick="App.manualCapture()"></button>
+    <div class="btn-icon" id="btn-torch" onclick="App.toggleTorch()">🔦</div>
+  </div>
+</div>
+
+<!-- ══ PROCESSING ══ -->
+<div id="s-processing" class="screen">
+  <img class="proc-preview" id="proc-preview" src="" alt="">
+  <div class="proc-logo">ÉLUME</div>
+  <div class="spinner"></div>
+  <div class="proc-stage" id="proc-stage">Analysing your features…</div>
+  <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div id="s-results" class="screen">
+  <div class="res-header">
+    <div>
+      <div class="res-eyebrow">Your recommended look</div>
+      <div class="res-style" id="res-style-name">—</div>
+    </div>
+    <button class="btn-sm" onclick="App.startCamera()">Retake</button>
+  </div>
+
+  <!-- style chips -->
+  <div class="chips-row" id="style-chips"></div>
+
+  <!-- before/after slider -->
+  <div class="cmp-labels"><span>Before</span><span>After</span></div>
+  <div class="cmp-wrap">
+    <div class="cmp-container" id="cmp-container">
+      <img class="cmp-img" id="cmp-before" src="" alt="Before">
+      <img class="cmp-img cmp-after" id="cmp-after" src="" alt="After">
+      <div class="cmp-slider" id="cmp-slider">
+        <div class="cmp-handle">⇔</div>
+      </div>
+      <div class="style-loading" id="style-loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- analysis card -->
+  <div class="analysis">
+    <div class="a-label">Face Analysis</div>
+    <div class="a-grid">
+      <div><div class="a-key">Face Shape</div><div class="a-val" id="a-shape">—</div></div>
+      <div><div class="a-key">Skin Tone</div><div class="a-val" id="a-skin">—</div></div>
+      <div><div class="a-key">Hair Colour</div><div class="a-val" id="a-color">—</div></div>
+      <div><div class="a-key">Hair Length</div><div class="a-val" id="a-length">—</div></div>
+    </div>
+    <div class="a-rule"></div>
+    <div class="a-reason" id="a-reason">—</div>
+  </div>
+
+  <!-- actions -->
+  <div class="res-actions">
+    <button class="btn-save" onclick="App.saveResult()">Save to Gallery</button>
+    <button class="btn-routine-cta" onclick="App.goRoutine()">Build My Hair Routine →</button>
+  </div>
+</div>
+
+<!-- ══ ROUTINE ══ -->
+<div id="s-routine" class="screen">
+  <div class="rtn-header">
+    <div class="rtn-eyebrow">Daily Care</div>
+    <div class="rtn-title">My Routine</div>
+  </div>
+
+  <!-- notif banner -->
+  <div class="notif-banner" id="notif-banner">
+    <div style="font-size:22px">🔔</div>
+    <div class="notif-text">
+      <strong>Enable reminders</strong>
+      Get gentle nudges at the right time for each step.
+    </div>
+    <button class="btn-notif" onclick="App.requestNotifications()">Allow</button>
+  </div>
+
+  <!-- score gauge -->
+  <div class="gauge-wrap">
+    <div class="gauge-card">
+      <svg class="gauge-svg" viewBox="0 0 200 110">
+        <path class="gauge-track"
+          d="M 20 100 A 80 80 0 0 1 180 100"
+          stroke-dasharray="251" stroke-dashoffset="0"/>
+        <path class="gauge-fill" id="gauge-fill"
+          d="M 20 100 A 80 80 0 0 1 180 100"
+          stroke-dasharray="251" stroke-dashoffset="251"/>
+        <text class="gauge-num" id="gauge-num" x="100" y="92">—</text>
+        <text class="gauge-tag" x="100" y="108">HAIR HEALTH SCORE</text>
+      </svg>
+      <div class="streak-row">
+        <div class="streak-box">
+          <div class="streak-num" id="streak-num">0</div>
+          <div class="streak-label">Day Streak</div>
+        </div>
+        <div class="streak-box">
+          <div class="streak-num" id="xp-num">0</div>
+          <div class="streak-label">Total XP</div>
+        </div>
+        <div class="streak-box">
+          <div class="streak-num" id="done-today-num">0/0</div>
+          <div class="streak-label">Today</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- tip -->
+  <div id="daily-tip" class="tip-card" style="margin-top:14px">
+    <div class="tip-ico">💡</div>
+    <div class="tip-text"><strong>Today's tip</strong><span id="tip-text">Loading…</span></div>
+  </div>
+
+  <!-- today's tasks -->
+  <div class="section-head">
+    <div class="section-title">Today's Tasks</div>
+    <div style="font-size:11px;color:var(--dim)" id="tasks-date"></div>
+  </div>
+  <div class="task-list" id="task-list"></div>
+
+  <!-- upcoming -->
+  <div class="section-head" style="margin-top:8px">
+    <div class="section-title">Coming Up</div>
+  </div>
+  <div class="task-list" id="upcoming-list"></div>
+
+  <!-- salon booking -->
+  <div class="salon-card" onclick="App.bookSalon()">
+    <div class="salon-ico">✂️</div>
+    <div class="salon-body">
+      <div class="salon-title">Book a Salon Visit</div>
+      <div class="salon-sub">Find top-rated salons near you</div>
+    </div>
+    <div class="salon-arrow">›</div>
+  </div>
+
+  <div style="height:12px"></div>
+</div>
+
+<!-- ══ BADGES ══ -->
+<div id="s-badges" class="screen">
+  <div class="bdg-header">
+    <div class="bdg-eyebrow">Achievements</div>
+    <div class="bdg-title">Badges</div>
+    <div class="bdg-count" id="bdg-count">0 earned</div>
+  </div>
+
+  <!-- level bar -->
+  <div class="level-bar">
+    <div class="level-row">
+      <div class="level-name" id="level-name">Beginner</div>
+      <div class="level-xp" id="level-xp-text">0 / 100 XP</div>
+    </div>
+    <div class="level-track"><div class="level-fill" id="level-fill" style="width:0%"></div></div>
+  </div>
+
+  <div class="bdg-grid" id="bdg-grid"></div>
+</div>
+
+<!-- ── Bottom Nav ── -->
+<nav class="bnav">
+  <div class="bnav-tab" id="tab-tryon" onclick="App.nav('tryon')">
+    <div class="bnav-icon">✦</div>
+    <div class="bnav-label">Try-On</div>
+  </div>
+  <div class="bnav-tab" id="tab-routine" onclick="App.nav('routine')">
+    <div class="bnav-icon">◎</div>
+    <div class="bnav-label">Routine</div>
+  </div>
+  <div class="bnav-tab" id="tab-badges" onclick="App.nav('badges')">
+    <div class="bnav-icon">⬡</div>
+    <div class="bnav-label">Badges</div>
+  </div>
+</nav>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+<!-- Celebrate -->
+<div class="celebrate" id="celebrate"></div>
+
+<!-- Badge unlock overlay -->
+<div class="bdg-unlock" id="bdg-unlock">
+  <div class="bdg-unlock-card">
+    <div class="bdg-unlock-ico" id="bdg-unlock-ico"></div>
+    <div class="bdg-unlock-eyebrow">Badge Unlocked</div>
+    <div class="bdg-unlock-name" id="bdg-unlock-name"></div>
+    <div class="bdg-unlock-desc" id="bdg-unlock-desc"></div>
+    <button class="bdg-unlock-close" onclick="App.closeBadgeUnlock()">Claim</button>
+  </div>
+</div>
+
+<!-- MediaPipe -->
+<script type="module">
+import { FaceLandmarker, FilesetResolver, DrawingUtils } from
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const API_BASE = String.fromCharCode(104,116,116,112,115,58,47,47,100,97,116,97,45,115,105,108,105,99,111,110,45,115,116,117,100,105,111,46,110,103,114,111,107,45,102,114,101,101,46,100,101,118);
+const STYLES   = ['natural waves','sleek straight','voluminous curls','textured bob',
+                  'layered shag','bixie cut','french girl','beach blowout'];
+const DAILY_TIPS = [
+  'Deep conditioning once a week significantly reduces breakage. Leave it on for 20 minutes.',
+  'Cold water rinse after washing seals the cuticle and adds shine.',
+  'Microfibre towels cause far less frizz than regular terry cloth.',
+  'Scalp massage for 4 minutes daily increases blood flow to follicles.',
+  'Never brush wet hair — use a wide-tooth comb starting from the ends.',
+  'Silk pillowcases reduce friction and help preserve your style overnight.',
+  'Heat protectant should be applied before every blow-dry, even on low heat.',
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const State = {
+  screen: 'welcome',
+  capturedBlob: null,
+  capturedDataURL: null,
+  apiResult: null,
+  currentStyleIdx: 0,
+  styleImages: {},
+  facingMode: 'user',
+  torchOn: false,
+  camStream: null,
+  faceLandmarker: null,
+  landmarkLoop: null,
+  countdownTimer: null,
+  countdownActive: false,
+  checks: { face:false, center:false, dist:false, level:false, light:false, hair:false },
+  // routine / gamification (persisted)
+  routine: null,
+  xp: 0,
+  streak: 0,
+  lastActiveDate: null,
+  taskState: {},  // { taskId: { doneDate } }
+  earnedBadges: {},  // { badgeId: dateString }
+};
+
+// ─── BADGE DEFINITIONS ────────────────────────────────────────────────────────
+const BADGES = [
+  { id:'first_scan',  icon:'📸', name:'First Look',     desc:'Completed your first AI hair scan.',          xp:50  },
+  { id:'first_task',  icon:'✅', name:'First Step',     desc:'Completed your first routine task.',          xp:25  },
+  { id:'streak_3',    icon:'🔥', name:'Three Day Fire', desc:'Maintained a 3-day care streak.',             xp:75  },
+  { id:'streak_7',    icon:'💎', name:'Devoted',        desc:'7-day streak — serious commitment.',          xp:150 },
+  { id:'streak_30',   icon:'👑', name:'Crown',          desc:'30-day streak. You are the routine.',         xp:500 },
+  { id:'styles_3',    icon:'💇', name:'Style Explorer', desc:'Tried 3 different hairstyle previews.',       xp:50  },
+  { id:'saved',       icon:'🖼', name:'Keeper',         desc:'Saved your first result to the gallery.',     xp:30  },
+  { id:'salon',       icon:'✂️', name:'In the Chair',   desc:'Booked a salon appointment.',                 xp:40  },
+  { id:'perfect_day', icon:'⭐', name:'Perfect Day',    desc:'Completed every task in a single day.',       xp:100 },
+  { id:'xp_500',      icon:'🌟', name:'Rising Star',    desc:'Earned 500 total XP.',                        xp:100 },
+  { id:'xp_1000',     icon:'🏆', name:'Gold Standard',  desc:'Earned 1,000 total XP.',                      xp:200 },
+  { id:'scan_5',      icon:'🔍', name:'Researcher',     desc:'Ran 5 AI hair analyses.',                     xp:100 },
+];
+
+// ─── ROUTINE TASKS ────────────────────────────────────────────────────────────
+const BASE_TASKS = [
+  { id:'wash',    icon:'🚿', name:'Wash Hair',            freq:'every3',  pts:30, time:'Evening', notif:19 },
+  { id:'cond',    icon:'💆', name:'Condition',            freq:'every3',  pts:20, time:'Evening', notif:19 },
+  { id:'scalp',   icon:'🤲', name:'Scalp Massage',        freq:'daily',   pts:15, time:'Morning', notif: 8 },
+  { id:'deepcond',icon:'✨', name:'Deep Condition Mask',  freq:'weekly',  pts:40, time:'Weekend', notif:10 },
+  { id:'trim',    icon:'✂️', name:'Schedule Trim',        freq:'monthly', pts:50, time:'Anytime', notif:12 },
+  { id:'oil',     icon:'💧', name:'Hair Oil Treatment',   freq:'weekly',  pts:35, time:'Evening', notif:20 },
+  { id:'protect', icon:'🛡', name:'Apply Heat Protectant',freq:'daily',   pts:10, time:'Morning', notif: 7 },
+  { id:'brush',   icon:'🪮', name:'Detangle Gently',      freq:'daily',   pts:10, time:'Morning', notif: 7 },
+];
+
+const LEVEL_THRESHOLDS = [
+  { name:'Beginner',   min:0    },
+  { name:'Apprentice', min:200  },
+  { name:'Dedicated',  min:500  },
+  { name:'Expert',     min:1000 },
+  { name:'Master',     min:2000 },
+];
+
+// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+function save() {
+  const d = {
+    xp: State.xp,
+    streak: State.streak,
+    lastActiveDate: State.lastActiveDate,
+    taskState: State.taskState,
+    earnedBadges: State.earnedBadges,
+    scanCount: State.scanCount || 0,
+    savedCount: State.savedCount || 0,
+    stylesTriedCount: State.stylesTriedCount || 0,
+    salonCount: State.salonCount || 0,
+  };
+  localStorage.setItem('elume_v1', JSON.stringify(d));
+}
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem('elume_v1') || '{}');
+    State.xp           = d.xp           || 0;
+    State.streak       = d.streak       || 0;
+    State.lastActiveDate = d.lastActiveDate || null;
+    State.taskState    = d.taskState    || {};
+    State.earnedBadges = d.earnedBadges || {};
+    State.scanCount    = d.scanCount    || 0;
+    State.savedCount   = d.savedCount   || 0;
+    State.stylesTriedCount = d.stylesTriedCount || 0;
+    State.salonCount   = d.salonCount   || 0;
+  } catch(e) {}
+}
+
+// ─── UTILITIES ────────────────────────────────────────────────────────────────
+function today() { return new Date().toISOString().slice(0,10); }
+function fmt(d)   { return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+
+function isTaskDueToday(task) {
+  const t = today();
+  const done = State.taskState[task.id]?.doneDate;
+  if (task.freq === 'daily')   return done !== t;
+  if (task.freq === 'every3') {
+    if (!done) return true;
+    const diff = (new Date(t) - new Date(done)) / 86400000;
+    return diff >= 3;
+  }
+  if (task.freq === 'weekly') {
+    if (!done) return true;
+    const diff = (new Date(t) - new Date(done)) / 86400000;
+    return diff >= 7;
+  }
+  if (task.freq === 'monthly') {
+    if (!done) return true;
+    const diff = (new Date(t) - new Date(done)) / 86400000;
+    return diff >= 28;
+  }
+  return false;
+}
+
+function isTaskDone(task) {
+  return State.taskState[task.id]?.doneDate === today();
+}
+
+function isDayOverdue(task) {
+  const done = State.taskState[task.id]?.doneDate;
+  if (!done) return false;
+  const diff = (new Date(today()) - new Date(done)) / 86400000;
+  if (task.freq === 'daily')   return diff > 1;
+  if (task.freq === 'every3') return diff > 4;
+  if (task.freq === 'weekly')  return diff > 9;
+  return false;
+}
+
+function getLevel() {
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (State.xp >= LEVEL_THRESHOLDS[i].min) {
+      return { ...LEVEL_THRESHOLDS[i], idx:i };
+    }
+  }
+  return { ...LEVEL_THRESHOLDS[0], idx:0 };
+}
+
+function getLevelProgress() {
+  const lv = getLevel();
+  const next = LEVEL_THRESHOLDS[lv.idx + 1];
+  if (!next) return 100;
+  return ((State.xp - lv.min) / (next.min - lv.min)) * 100;
+}
+
+function getLevelNext() {
+  const lv = getLevel();
+  return LEVEL_THRESHOLDS[lv.idx + 1];
+}
+
+// ─── XP + STREAKS ─────────────────────────────────────────────────────────────
+function awardXP(amount, label) {
+  State.xp += amount;
+  save();
+  App.toast(`+${amount} XP · ${label}`);
+  checkXPBadges();
+  renderRoutine();
+  renderBadges();
+}
+
+function updateStreak() {
+  const t = today();
+  if (State.lastActiveDate === t) return;
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toISOString().slice(0,10);
+  if (State.lastActiveDate === yStr) {
+    State.streak++;
+  } else if (State.lastActiveDate !== t) {
+    // more than 1 day gap — forgiveness: don't crash to 0, decay by 1
+    State.streak = Math.max(0, State.streak - 1);
+  }
+  State.lastActiveDate = t;
+  save();
+  checkStreakBadges();
+}
+
+// ─── BADGE ENGINE ─────────────────────────────────────────────────────────────
+function checkBadge(id) {
+  if (State.earnedBadges[id]) return;
+  const b = BADGES.find(x => x.id === id);
+  if (!b) return;
+  State.earnedBadges[id] = today();
+  save();
+  State.xp += b.xp; // badge bonus XP (silent)
+  save();
+  showBadgeUnlock(b);
+  renderBadges();
+}
+
+function checkStreakBadges() {
+  if (State.streak >= 3)  checkBadge('streak_3');
+  if (State.streak >= 7)  checkBadge('streak_7');
+  if (State.streak >= 30) checkBadge('streak_30');
+}
+
+function checkXPBadges() {
+  if (State.xp >= 500)  checkBadge('xp_500');
+  if (State.xp >= 1000) checkBadge('xp_1000');
+}
+
+function checkPerfectDay() {
+  const due = BASE_TASKS.filter(t => isTaskDueToday(t));
+  const allDone = due.length > 0 && due.every(t => isTaskDone(t));
+  if (allDone) checkBadge('perfect_day');
+}
+
+// ─── SCREENS ──────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+  State.screen = id;
+}
+
+// ─── MEDIAPIPE INIT ───────────────────────────────────────────────────────────
+async function initMediaPipe() {
+  if (State.faceLandmarker) return;
+  const vision = await FilesetResolver.forVisionTasks(
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+  );
+  State.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate:'GPU'
+    },
+    outputFaceBlendshapes: true,
+    outputFacialTransformationMatrixes: true,
+    runningMode: 'VIDEO',
+    numFaces: 1,
+  });
+}
+
+// ─── CAMERA ───────────────────────────────────────────────────────────────────
+async function startCameraInternal() {
+  if (State.camStream) stopCamera();
+  try {
+    State.camStream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode: State.facingMode, width:{ideal:1920}, height:{ideal:1080} },
+      audio:false
+    });
+    const video = document.getElementById('video');
+    video.srcObject = State.camStream;
+    await video.play();
+    await initMediaPipe();
+    startLandmarkLoop();
+  } catch(e) {
+    App.toast('Camera access denied');
+  }
+}
+
+function stopCamera() {
+  if (State.camStream) { State.camStream.getTracks().forEach(t=>t.stop()); State.camStream=null; }
+  if (State.landmarkLoop) { cancelAnimationFrame(State.landmarkLoop); State.landmarkLoop=null; }
+}
+
+function startLandmarkLoop() {
+  const video  = document.getElementById('video');
+  const canvas = document.getElementById('overlay-canvas');
+  const ctx    = canvas.getContext('2d');
+  let lastMs   = -1;
+
+  function loop(ts) {
+    if (!State.camStream) return;
+    State.landmarkLoop = requestAnimationFrame(loop);
+
+    canvas.width  = video.videoWidth  || canvas.offsetWidth;
+    canvas.height = video.videoHeight || canvas.offsetHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!State.faceLandmarker || !video.videoWidth) return;
+
+    const ms = performance.now();
+    if (ms === lastMs) return;
+    lastMs = ms;
+
+    const results = State.faceLandmarker.detectForVideo(video, ms);
+
+    if (!results.faceLandmarks.length) {
+      setChecks({ face:false, center:false, dist:false, level:false, light:false, hair:false });
+      updateGuide();
+      return;
+    }
+
+    const lm = results.faceLandmarks[0];
+
+    // mirror x for front camera
+    const mx = k => (State.facingMode === 'user') ? 1 - lm[k].x : lm[k].x;
+
+    // ── draw golden mesh ──
+    ctx.save();
+    if (State.facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+    const du = new DrawingUtils(ctx);
+    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+      { color:'rgba(201,168,76,0.18)', lineWidth:0.6 });
+    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
+      { color:'rgba(201,168,76,0.55)', lineWidth:1.2 });
+    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
+      { color:'rgba(201,168,76,0.75)', lineWidth:1.5 });
+    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
+      { color:'rgba(201,168,76,0.75)', lineWidth:1.5 });
+    ctx.restore();
+
+    // ── checks ──
+    const noseTip = { x: mx(1), y: lm[1].y };
+    const chin    = { x: mx(152), y: lm[152].y };
+    const leftE   = { x: mx(33),  y: lm[33].y };
+    const rightE  = { x: mx(263), y: lm[263].y };
+    const foreL   = { x: mx(54),  y: lm[54].y };
+    const foreR   = { x: mx(284), y: lm[284].y };
+
+    const faceH   = (chin.y - lm[10].y);
+    const faceW   = Math.abs(foreR.x - foreL.x);
+    const centerX = noseTip.x;
+    const centerY = (lm[10].y + chin.y) / 2;
+    const eyeDiff = Math.abs(leftE.y - rightE.y);
+
+    const c = {
+      face:   true,
+      center: centerX > 0.35 && centerX < 0.65 && centerY > 0.3 && centerY < 0.72,
+      dist:   faceH > 0.28 && faceH < 0.70 && faceW > 0.22,
+      level:  eyeDiff < 0.04,
+      light:  checkLighting(video, canvas),
+      hair:   checkHair(video, canvas, lm, mx),
+    };
+
+    setChecks(c);
+    updateGuide();
+
+    const allOk = Object.values(c).every(Boolean);
+    document.getElementById('face-oval').classList.toggle('ready', allOk);
+    document.getElementById('btn-shutter').classList.toggle('ready', allOk);
+
+    if (allOk && !State.countdownActive) {
+      startCountdown();
+    } else if (!allOk && State.countdownActive) {
+      cancelCountdown();
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function checkLighting(video, canvas) {
+  const tmpC = document.createElement('canvas');
+  tmpC.width = 32; tmpC.height = 32;
+  const t = tmpC.getContext('2d');
+  t.drawImage(video, 0, 0, 32, 32);
+  const d = t.getImageData(0, 0, 32, 32).data;
+  let total = 0;
+  for (let i = 0; i < d.length; i += 4) total += (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114);
+  return (total / (32*32)) > 55;
+}
+
+function checkHair(video, canvas, lm, mx) {
+  const tmpC = document.createElement('canvas');
+  tmpC.width = 16; tmpC.height = 16;
+  const t = tmpC.getContext('2d');
+  // sample cheek area
+  const cx = Math.round(mx(234) * video.videoWidth);
+  const cy = Math.round(lm[234].y * video.videoHeight);
+  t.drawImage(video, cx - 8, cy - 8, 16, 16, 0, 0, 16, 16);
+  const dk = t.getImageData(0, 0, 16, 16).data;
+  let cr = 0, cg = 0, cb = 0;
+  for (let i = 0; i < dk.length; i += 4) { cr += dk[i]; cg += dk[i+1]; cb += dk[i+2]; }
+  const n = (16*16);
+  cr /= n; cg /= n; cb /= n;
+  // sample forehead
+  const fx = Math.round(mx(10) * video.videoWidth);
+  const fy = Math.round(lm[10].y * video.videoHeight - 18);
+  t.drawImage(video, fx - 8, fy - 8, 16, 16, 0, 0, 16, 16);
+  const fd = t.getImageData(0, 0, 16, 16).data;
+  let fr = 0, fg = 0, fb = 0;
+  for (let i = 0; i < fd.length; i += 4) { fr += fd[i]; fg += fd[i+1]; fb += fd[i+2]; }
+  fr /= n; fg /= n; fb /= n;
+  const diff = Math.abs(fr - cr) + Math.abs(fg - cg) + Math.abs(fb - cb);
+  return diff < 90; // large diff = hair covering forehead
+}
+
+function setChecks(c) {
+  State.checks = c;
+  const ids = { face:'chk-face', center:'chk-center', dist:'chk-dist',
+                level:'chk-level', light:'chk-light', hair:'chk-hair' };
+  for (const [k, elId] of Object.entries(ids)) {
+    const el = document.getElementById(elId);
+    el.classList.toggle('ok',   c[k]);
+    el.classList.toggle('fail', !c[k]);
+  }
+}
+
+function updateGuide() {
+  const c = State.checks;
+  const pill = document.getElementById('guide-pill');
+  const au = document.getElementById('arr-up'),
+        ad = document.getElementById('arr-down'),
+        al = document.getElementById('arr-left'),
+        ar = document.getElementById('arr-right');
+
+  [au,ad,al,ar].forEach(a => a.classList.remove('show'));
+  pill.className = 'guide-pill';
+
+  if (!c.face)   { pill.textContent = 'Position your face in the oval'; return; }
+  if (!c.light)  { pill.textContent = 'Move to better lighting'; pill.classList.add('warn'); return; }
+  if (!c.hair)   { pill.textContent = 'Tie hair back or sweep it behind your shoulders'; pill.classList.add('warn'); return; }
+  if (!c.center) {
+    pill.textContent = 'Centre your face';
+    al.classList.add('show'); ar.classList.add('show');
+    return;
+  }
+  if (!c.dist) {
+    pill.textContent = 'Move closer to the camera';
+    au.classList.add('show');
+    return;
+  }
+  if (!c.level)  { pill.textContent = 'Keep your head level'; pill.classList.add('warn'); return; }
+  pill.textContent = 'Hold still…'; pill.classList.add('ready');
+}
+
+// ─── COUNTDOWN ────────────────────────────────────────────────────────────────
+function startCountdown() {
+  State.countdownActive = true;
+  const cd = document.getElementById('countdown');
+  const num = document.getElementById('cnt-num');
+  const cheese = document.getElementById('cnt-cheese');
+  cheese.textContent = '';
+  let n = 3;
+
+  function tick() {
+    if (!State.countdownActive) return;
+    if (!Object.values(State.checks).every(Boolean)) { cancelCountdown(); return; }
+    cd.classList.add('show');
+    if (n > 0) {
+      num.textContent = n;
+      num.style.animation = 'none';
+      requestAnimationFrame(() => { num.style.animation = ''; });
+      n--;
+      State.countdownTimer = setTimeout(tick, 900);
+    } else {
+      num.textContent = '';
+      cheese.textContent = 'CHEESE';
+      State.countdownTimer = setTimeout(() => {
+        cd.classList.remove('show');
+        State.countdownActive = false;
+        capture();
+      }, 700);
+    }
+  }
+  tick();
+}
+
+function cancelCountdown() {
+  State.countdownActive = false;
+  if (State.countdownTimer) { clearTimeout(State.countdownTimer); State.countdownTimer = null; }
+  document.getElementById('countdown').classList.remove('show');
+}
+
+// ─── CAPTURE ──────────────────────────────────────────────────────────────────
+function capture() {
+  const video = document.getElementById('video');
+  const canvas = document.createElement('canvas');
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  if (State.facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, 0, 0);
+  canvas.toBlob(blob => {
+    State.capturedBlob    = blob;
+    State.capturedDataURL = canvas.toDataURL('image/jpeg', 0.92);
+    stopCamera();
+    App.submitToAPI();
+  }, 'image/jpeg', 0.92);
+}
+
+// ─── COMPARE SLIDER ───────────────────────────────────────────────────────────
+function initSlider() {
+  const container = document.getElementById('cmp-container');
+  const slider    = document.getElementById('cmp-slider');
+  const after     = document.getElementById('cmp-after');
+
+  function move(x) {
+    const rect = container.getBoundingClientRect();
+    let pct = (x - rect.left) / rect.width;
+    pct = Math.max(0.05, Math.min(0.95, pct));
+    slider.style.left = (pct * 100) + '%';
+    after.style.clipPath = `inset(0 ${(1-pct)*100}% 0 0)`;
+  }
+
+  container.addEventListener('touchmove', e => {
+    e.preventDefault();
+    move(e.touches[0].clientX);
+  }, { passive:false });
+  container.addEventListener('mousemove', e => {
+    if (e.buttons) move(e.clientX);
+  });
+  container.addEventListener('touchstart', e => move(e.touches[0].clientX), {passive:true});
+  container.addEventListener('mousedown',  e => move(e.clientX));
+}
+
+// ─── ROUTINE RENDER ───────────────────────────────────────────────────────────
+function renderRoutine() {
+  const t = today();
+  document.getElementById('tasks-date').textContent =
+    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+
+  // tip of the day
+  const tipIdx = (new Date().getDate()) % DAILY_TIPS.length;
+  document.getElementById('tip-text').textContent = DAILY_TIPS[tipIdx];
+
+  // score (XP-based, 0-100 window)
+  const score = Math.min(100, Math.round(State.xp / 20));
+  const el    = document.getElementById('gauge-fill');
+  const numEl = document.getElementById('gauge-num');
+  numEl.textContent = score;
+  // stroke-dasharray = 251, offset = 251 - (score/100)*251
+  el.style.strokeDashoffset = 251 - (score / 100) * 251;
+  el.className = 'gauge-fill' + (score < 40 ? ' low' : score < 70 ? ' amber' : '');
+
+  document.getElementById('streak-num').textContent = State.streak;
+  document.getElementById('xp-num').textContent    = State.xp;
+
+  // today's tasks
+  const due     = BASE_TASKS.filter(t => isTaskDueToday(t));
+  const notDue  = BASE_TASKS.filter(t => !isTaskDueToday(t));
+  const done    = BASE_TASKS.filter(t => isTaskDone(t));
+  document.getElementById('done-today-num').textContent = `${done.length}/${due.length + done.length}`;
+
+  // notif banner
+  const notifGranted = Notification?.permission === 'granted';
+  document.getElementById('notif-banner').classList.toggle('hide', notifGranted);
+
+  // task list
+  const tl = document.getElementById('task-list');
+  tl.innerHTML = '';
+  const todayTasks = [...due, ...done.filter(d => !due.includes(d))];
+  if (todayTasks.length === 0) {
+    tl.innerHTML = '<div style="padding:12px 0;font-size:13px;color:var(--dim);text-align:center">All caught up! ✦</div>';
+  }
+  todayTasks.forEach(task => {
+    const isDoneToday = isTaskDone(task);
+    const overdue     = isDayOverdue(task) && !isDoneToday;
+    const card = document.createElement('div');
+    card.className = 'task-card' + (isDoneToday ? ' done' : overdue ? ' overdue' : ' due');
+    card.innerHTML = `
+      <div class="task-ico ${isDoneToday ? 'done-ico' : ''}">${task.icon}</div>
+      <div class="task-body">
+        <div class="task-name">${task.name}</div>
+        <div class="task-meta ${overdue ? 'overdue' : 'due'}">${isDoneToday ? 'Done today' : overdue ? 'Overdue' : task.time} · +${task.pts} XP</div>
+      </div>
+      <div class="task-check">${isDoneToday ? '✓' : ''}</div>
+    `;
+    if (!isDoneToday) {
+      card.addEventListener('click', () => completeTask(task, card));
+    }
+    tl.appendChild(card);
+  });
+
+  // upcoming
+  const ul = document.getElementById('upcoming-list');
+  ul.innerHTML = '';
+  notDue.slice(0,3).forEach(task => {
+    const done = State.taskState[task.id]?.doneDate;
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    card.style.opacity = '.5';
+    card.innerHTML = `
+      <div class="task-ico">${task.icon}</div>
+      <div class="task-body">
+        <div class="task-name">${task.name}</div>
+        <div class="task-meta">${done ? 'Last done ' + fmt(done) : 'Not started'}</div>
+      </div>
+    `;
+    ul.appendChild(card);
+  });
+}
+
+function completeTask(task, card) {
+  State.taskState[task.id] = { doneDate: today() };
+  updateStreak();
+  awardXP(task.pts, task.name);
+  // pts animation
+  const pts = document.createElement('div');
+  pts.className = 'task-pts';
+  pts.textContent = '+' + task.pts;
+  card.appendChild(pts);
+  setTimeout(() => pts.remove(), 800);
+  checkBadge('first_task');
+  checkPerfectDay();
+  setTimeout(renderRoutine, 300);
+
+  // celebrate flash
+  const cel = document.getElementById('celebrate');
+  cel.classList.remove('pop');
+  requestAnimationFrame(() => cel.classList.add('pop'));
+}
+
+// ─── BADGES RENDER ────────────────────────────────────────────────────────────
+function renderBadges() {
+  const earned = Object.keys(State.earnedBadges).length;
+  document.getElementById('bdg-count').textContent = `${earned} of ${BADGES.length} earned`;
+
+  // level
+  const lv   = getLevel();
+  const prog = getLevelProgress();
+  const next = getLevelNext();
+  document.getElementById('level-name').textContent   = lv.name;
+  document.getElementById('level-fill').style.width   = prog + '%';
+  document.getElementById('level-xp-text').textContent =
+    next ? `${State.xp} / ${next.min} XP` : `${State.xp} XP — Max Level`;
+
+  const grid = document.getElementById('bdg-grid');
+  grid.innerHTML = '';
+  BADGES.forEach(b => {
+    const earnedDate = State.earnedBadges[b.id];
+    const card = document.createElement('div');
+    card.className = 'bdg-card' + (earnedDate ? ' earned' : '');
+    card.innerHTML = `
+      <div class="bdg-icon">${b.icon}</div>
+      <div class="bdg-name">${b.name}</div>
+      <div class="bdg-desc">${b.desc}</div>
+      ${earnedDate ? `<div class="bdg-date">${fmt(earnedDate)}</div>` : ''}
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function showBadgeUnlock(b) {
+  document.getElementById('bdg-unlock-ico').textContent  = b.icon;
+  document.getElementById('bdg-unlock-name').textContent = b.name;
+  document.getElementById('bdg-unlock-desc').textContent = b.desc + ` (+${b.xp} XP bonus)`;
+  document.getElementById('bdg-unlock').classList.add('show');
+}
+
+// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+async function scheduleNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  if (!('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.ready;
+  BASE_TASKS.filter(t => isTaskDueToday(t)).forEach((task, i) => {
+    const delay = (task.notif * 60 - new Date().getHours() * 60 - new Date().getMinutes()) * 60000;
+    if (delay > 0) {
+      setTimeout(() => {
+        reg.showNotification('ÉLUME · ' + task.name, {
+          body: `Time for your ${task.name.toLowerCase()} — +${task.pts} XP`,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: task.id,
+        });
+      }, delay);
+    }
+  });
+}
+
+// ─── PUBLIC API (window.App) ──────────────────────────────────────────────────
+const App = {
+  async startCamera() {
+    showScreen('camera');
+    document.body.classList.remove('show-nav');
+    await startCameraInternal();
+  },
+
+  async handleUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    State.capturedBlob = file;
+    State.capturedDataURL = await new Promise(res => {
+      const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file);
+    });
+    App.submitToAPI();
+  },
+
+  async submitToAPI() {
+    showScreen('processing');
+    document.body.classList.remove('show-nav');
+    document.getElementById('proc-preview').src = State.capturedDataURL;
+
+    const stages = [
+      [5,  'Detecting face features…'],
+      [25, 'Analysing hair & skin tone…'],
+      [45, 'Segmenting hair region…'],
+      [65, 'Generating style options…'],
+      [85, 'Applying recommended look…'],
+      [98, 'Finishing up…'],
+    ];
+    let si = 0;
+    const progEl  = document.getElementById('prog-fill');
+    const stageEl = document.getElementById('proc-stage');
+    const progTimer = setInterval(() => {
+      if (si < stages.length) {
+        progEl.style.width  = stages[si][0] + '%';
+        stageEl.textContent = stages[si][1];
+        si++;
+      }
+    }, 2200);
+
+    try {
+      const form = new FormData();
+      form.append('image', State.capturedBlob, 'photo.jpg');
+
+      const res  = await fetch(API_BASE + '/analyze', { method:'POST', body:form });
+      const data = await res.json();
+
+      clearInterval(progTimer);
+      progEl.style.width = '100%';
+
+      State.apiResult = data;
+      State.styleImages = {};
+      State.currentStyleIdx = 0;
+
+      // track scan count
+      State.scanCount = (State.scanCount || 0) + 1;
+      save();
+      if (State.scanCount === 1) checkBadge('first_scan');
+      if (State.scanCount >= 5) checkBadge('scan_5');
+      awardXP(20, 'AI Scan complete');
+
+      App.showResults();
+    } catch(err) {
+      clearInterval(progTimer);
+      App.toast('Connection error — is the Kaggle server running?');
+      showScreen('welcome');
+    }
+  },
+
+  showResults() {
+    showScreen('results');
+    document.body.classList.add('show-nav');
+    document.querySelectorAll('.bnav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-tryon').classList.add('active');
+
+    const d = State.apiResult;
+    document.getElementById('res-style-name').textContent = d.recommended_style || STYLES[0];
+    document.getElementById('a-shape').textContent  = d.face_shape  || '—';
+    document.getElementById('a-skin').textContent   = d.skin_tone   || '—';
+    document.getElementById('a-color').textContent  = d.hair_color  || '—';
+    document.getElementById('a-length').textContent = d.hair_length || '—';
+    document.getElementById('a-reason').textContent = d.reason      || 'Style selected based on your facial proportions and features.';
+    document.getElementById('cmp-before').src = State.capturedDataURL;
+    document.getElementById('cmp-after').src  = d.result_image || '';
+
+    // chips
+    const chipsEl = document.getElementById('style-chips');
+    chipsEl.innerHTML = '';
+    const styles = d.styles || STYLES;
+    styles.forEach((s, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (i === 0 ? ' active' : '');
+      chip.textContent = s;
+      chip.onclick = () => App.tryStyle(s, i, chip);
+      chipsEl.appendChild(chip);
+    });
+
+    initSlider();
+  },
+
+  async tryStyle(style, idx, chipEl) {
+    if (State.currentStyleIdx === idx) return;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chipEl.classList.add('active');
+    State.currentStyleIdx = idx;
+
+    // track styles tried
+    State.stylesTriedCount = (State.stylesTriedCount || 0) + 1;
+    save();
+    if (State.stylesTriedCount >= 3) checkBadge('styles_3');
+
+    if (State.styleImages[style]) {
+      document.getElementById('cmp-after').src = State.styleImages[style];
+      document.getElementById('res-style-name').textContent = style;
+      return;
+    }
+
+    document.getElementById('style-loading').classList.add('show');
+    try {
+      const form = new FormData();
+      form.append('image', State.capturedBlob, 'photo.jpg');
+      form.append('style', style);
+      const res  = await fetch(API_BASE + '/inpaint', { method:'POST', body:form });
+      const data = await res.json();
+      State.styleImages[style] = data.result_image;
+      document.getElementById('cmp-after').src = data.result_image;
+      document.getElementById('res-style-name').textContent = style;
+    } catch(e) {
+      App.toast('Could not load style — check server');
+    }
+    document.getElementById('style-loading').classList.remove('show');
+  },
+
+  saveResult() {
+    const link = document.createElement('a');
+    link.href     = document.getElementById('cmp-after').src;
+    link.download = 'elume-result.jpg';
+    link.click();
+    State.savedCount = (State.savedCount || 0) + 1;
+    save();
+    checkBadge('saved');
+    awardXP(10, 'Result saved');
+    App.toast('Saved to gallery ✦');
+  },
+
+  goRoutine() {
+    App.nav('routine');
+  },
+
+  nav(tab) {
+    const screenMap = { tryon:'results', routine:'routine', badges:'badges' };
+    const target = State.apiResult ? (screenMap[tab] || 'welcome') : (tab === 'tryon' ? 'welcome' : screenMap[tab]);
+    showScreen(target);
+    document.body.classList.add('show-nav');
+    document.querySelectorAll('.bnav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'routine') renderRoutine();
+    if (tab === 'badges')  renderBadges();
+  },
+
+  switchCamera() {
+    State.facingMode = State.facingMode === 'user' ? 'environment' : 'user';
+    cancelCountdown();
+    startCameraInternal();
+  },
+
+  async toggleTorch() {
+    if (!State.camStream) return;
+    const track = State.camStream.getVideoTracks()[0];
+    try {
+      State.torchOn = !State.torchOn;
+      await track.applyConstraints({ advanced:[{ torch: State.torchOn }] });
+      document.getElementById('btn-torch').style.opacity = State.torchOn ? '1' : '0.5';
+    } catch(e) {
+      App.toast('Torch not available');
+    }
+  },
+
+  manualCapture() {
+    if (State.countdownActive) return;
+    cancelCountdown();
+    startCountdown();
+  },
+
+  async requestNotifications() {
+    if (!('Notification' in window)) { App.toast('Notifications not supported'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      scheduleNotifications();
+      App.toast('Reminders enabled ✦');
+      document.getElementById('notif-banner').classList.add('hide');
+    } else {
+      App.toast('Permission denied in system settings');
+    }
+  },
+
+  bookSalon() {
+    State.salonCount = (State.salonCount || 0) + 1;
+    save();
+    checkBadge('salon');
+    awardXP(15, 'Salon booked');
+    window.open('https://www.google.com/search?q=hair+salon+near+me', '_blank');
+  },
+
+
+  installPWA() {
+    if (window._deferredInstallPrompt) {
+      window._deferredInstallPrompt.prompt();
+      window._deferredInstallPrompt.userChoice.then(choice => {
+        if (choice.outcome === 'accepted') {
+          App.toast('ÉLUME installed ✦');
+          document.getElementById('btn-install').classList.remove('show');
+        }
+        window._deferredInstallPrompt = null;
+      });
+    }
+  },
+
+  closeBadgeUnlock() {
+    document.getElementById('bdg-unlock').classList.remove('show');
+  },
+
+  toast(msg, duration = 2500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), duration);
+  },
+};
+
+window.App = App;
+
+
+// ─── INSTALL PROMPT ───────────────────────────────────────────────────────────
+window._deferredInstallPrompt = null;
+
+// Android / Chrome — capture the beforeinstallprompt event
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  window._deferredInstallPrompt = e;
+  document.getElementById('btn-install').classList.add('show');
+  document.getElementById('ios-tip').classList.remove('show');
+});
+
+// iOS detection — show the share tip instead
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone === true;
+if (isIOS && !isStandalone) {
+  document.getElementById('ios-tip').classList.add('show');
+  document.getElementById('btn-install').classList.remove('show');
+}
+
+// Hide install UI once actually installed
+window.addEventListener('appinstalled', () => {
+  document.getElementById('btn-install').classList.remove('show');
+  document.getElementById('ios-tip').classList.remove('show');
+  App.toast('ÉLUME installed ✦');
+});
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+load();
+renderBadges();
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
+HTMLEOF
