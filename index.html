@@ -1,1577 +1,2199 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ÉLUME">
-  <meta name="theme-color" content="#080604">
-  <title>ÉLUME</title>
-  <link rel="manifest" href="manifest.json">
-  <style>
-    :root {
-      --gold:   #c9a84c;
-      --gold-d: rgba(201,168,76,0.22);
-      --gold-g: rgba(201,168,76,0.55);
-      --bg:     #080604;
-      --s1:     #111009;
-      --s2:     #1c1810;
-      --s3:     #242016;
-      --text:   #f0ead8;
-      --dim:    #7a7060;
-      --danger: #d96060;
-      --ok:     #5aaa7a;
-      --sab:    env(safe-area-inset-bottom, 0px);
-      --sat:    env(safe-area-inset-top, 0px);
-      --sal:    env(safe-area-inset-left, 0px);
-      --sar:    env(safe-area-inset-right, 0px);
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Élume — AI Hair Styling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+<script type="module">
+  // Load MediaPipe tasks-vision via CDN (ES module)
+  import { ImageSegmenter, FilesetResolver } from
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
+  window._mpLoaded = false;
+  window._mpSegmenter = null;
+  (async () => {
+    try {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+      );
+      window._mpSegmenter = await ImageSegmenter.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite",
+          delegate: "GPU",
+        },
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+        runningMode: "IMAGE",
+      });
+      window._mpLoaded = true;
+      console.log("✅ MediaPipe Selfie Segmenter ready");
+      const badge = document.getElementById('mpBadge');
+      if (badge) { badge.textContent = 'MP Ready'; badge.style.color = 'var(--success)'; badge.style.borderColor = 'var(--success)'; }
+    } catch (err) {
+      console.warn("MediaPipe load failed:", err);
+      const badge = document.getElementById('mpBadge');
+      if (badge) { badge.textContent = 'MP Unavailable'; badge.style.color = 'var(--error)'; badge.style.borderColor = 'var(--error)'; }
     }
-    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
-      font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif;
-      -webkit-font-smoothing:antialiased; }
+  })();
+</script>
 
-    /* ── Screens ── */
-    .screen { position:absolute; inset:0; display:flex; flex-direction:column;
-      opacity:0; pointer-events:none; transition:opacity .3s ease; }
-    .screen.active { opacity:1; pointer-events:all; }
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* ── Bottom Nav ── */
-    .bnav {
-      position:fixed; bottom:0; left:0; right:0; z-index:50;
-      display:none; align-items:center; justify-content:space-around;
-      padding:10px 0 calc(10px + var(--sab));
-      background:rgba(8,6,4,.95); backdrop-filter:blur(24px);
-      border-top:1px solid rgba(255,255,255,.06);
-    }
-    body.show-nav .bnav { display:flex; }
-    .bnav-tab {
-      flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
-      cursor:pointer; padding:4px 0; opacity:.38; transition:opacity .2s;
-    }
-    .bnav-tab.active { opacity:1; }
-    .bnav-icon { font-size:22px; color:var(--dim); transition:color .2s; }
-    .bnav-label { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); transition:color .2s; }
-    .bnav-tab.active .bnav-icon, .bnav-tab.active .bnav-label { color:var(--gold); }
+  :root {
+    --obsidian:  #0D0D0F;
+    --obsidian2: #141417;
+    --surface:   #1A1A1F;
+    --border:    #2A2A32;
+    --ivory:     #F5F0E8;
+    --ivory-dim: #C8C0B0;
+    --rose:      #C8A99A;
+    --gold:      #D4A853;
+    --gold-dim:  #A07830;
+    --lavender:  #9B8FAE;
+    --success:   #6BBF8E;
+    --error:     #C06060;
+  }
 
-    /* ══════════ WELCOME ══════════ */
-    #s-welcome { align-items:center; justify-content:center; gap:26px; padding:40px 36px; }
-    .wlc-logo { font-size:52px; font-weight:100; letter-spacing:18px; color:var(--gold);
-      text-shadow:0 0 80px rgba(201,168,76,.2); }
-    .wlc-sub { font-size:10px; letter-spacing:7px; color:var(--dim); text-transform:uppercase; margin-top:-14px; }
-    .wlc-rule { width:36px; height:1px; background:var(--gold); opacity:.45; }
-    .wlc-desc { text-align:center; font-size:14px; line-height:1.8; color:var(--dim); max-width:270px; }
-    .btn-gold { background:var(--gold); color:#000; font-size:12px; font-weight:700; letter-spacing:3px;
-      text-transform:uppercase; border:none; border-radius:2px; padding:16px 44px; cursor:pointer;
-      width:100%; max-width:280px; transition:opacity .2s; }
-    .btn-gold:active { opacity:.82; }
-    .btn-ghost { background:transparent; color:var(--dim); font-size:11px; letter-spacing:2px;
-      text-transform:uppercase; border:1px solid var(--s2); border-radius:2px;
-      padding:13px 44px; cursor:pointer; width:100%; max-width:280px; }
-    #file-input { display:none; }
-    .btn-install { display:none; align-items:center; justify-content:center; gap:8px;
-      background:transparent; color:var(--gold); font-size:11px; letter-spacing:2px;
-      text-transform:uppercase; border:1px solid var(--gold-d); border-radius:2px;
-      padding:13px 44px; cursor:pointer; width:100%; max-width:280px; transition:opacity .2s; }
-    .btn-install.show { display:flex; }
-    .btn-install:active { opacity:.75; }
-    .ios-tip { display:none; align-items:center; gap:10px; background:rgba(201,168,76,.07);
-      border:1px solid var(--gold-d); border-radius:10px; padding:12px 16px;
-      max-width:280px; width:100%; }
-    .ios-tip.show { display:flex; }
-    .ios-tip-text { font-size:11px; color:var(--dim); line-height:1.6; }
-    .ios-tip-text strong { color:var(--gold); display:block; margin-bottom:2px; }
+  html { scroll-behavior: smooth; }
 
-    /* ══════════ CAMERA ══════════ */
-    #s-camera { background:#000; padding-bottom:calc(64px + var(--sab)); }
-    .cam-wrap { position:relative; flex:1; overflow:hidden; }
-    #video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
-    #overlay-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-    .face-oval { position:absolute; top:50%; left:50%; transform:translate(-50%,-54%);
-      width:64%; aspect-ratio:3/4.2; border:1.5px solid rgba(201,168,76,.2); border-radius:50%;
-      transition:border-color .3s, box-shadow .3s; pointer-events:none; }
-    .face-oval.ready { border-color:var(--gold); animation:oval-pulse .9s ease-in-out infinite; }
-    @keyframes oval-pulse {
-      0%,100% { box-shadow:0 0 0 0 var(--gold-g); }
-      50% { box-shadow:0 0 0 22px rgba(201,168,76,0); }
-    }
-    .cam-top { position:absolute; top:0; left:0; right:0; z-index:20;
-      padding:calc(14px + var(--sat)) 18px 18px;
-      background:linear-gradient(to bottom, rgba(0,0,0,.75) 0%, transparent 100%);
-      display:flex; align-items:center; justify-content:space-between; }
-    .cam-brand { font-size:17px; font-weight:100; letter-spacing:9px; color:var(--gold); }
-    .checklist { position:absolute; top:50%; right:12px; transform:translateY(-50%); z-index:20;
-      display:flex; flex-direction:column; gap:6px; }
-    .chk { display:flex; align-items:center; gap:6px; background:rgba(0,0,0,.6);
-      backdrop-filter:blur(10px); border-radius:20px; padding:5px 10px; font-size:11px;
-      color:var(--dim); border:1px solid rgba(255,255,255,.06); transition:color .25s, border-color .25s; }
-    .chk.ok   { color:var(--gold);   border-color:rgba(201,168,76,.35); }
-    .chk.fail { color:var(--danger); border-color:rgba(217,96,96,.35); }
-    .chk-dot  { width:5px; height:5px; border-radius:50%; background:currentColor; flex-shrink:0; }
-    .arrows { position:absolute; inset:0; pointer-events:none; z-index:15; }
-    .arr { position:absolute; color:var(--gold); font-size:30px; opacity:0; transition:opacity .25s;
-      text-shadow:0 0 24px var(--gold-g); animation:arr-y .7s ease-in-out infinite alternate; }
-    .arr.show { opacity:1; }
-    .arr.up    { top:88px;    left:50%; transform:translateX(-50%); }
-    .arr.down  { bottom:80px; left:50%; transform:translateX(-50%); }
-    .arr.left  { left:16px;   top:50%; transform:translateY(-50%); animation:arr-x .7s ease-in-out infinite alternate; }
-    .arr.right { right:16px;  top:50%; transform:translateY(-50%); animation:arr-x .7s ease-in-out infinite alternate; }
-    @keyframes arr-y { from { transform:translateX(-50%) translateY(0); } to { transform:translateX(-50%) translateY(-9px); } }
-    @keyframes arr-x { from { transform:translateY(-50%) translateX(0); } to { transform:translateY(-50%) translateX(-9px); } }
-    .guide-pill { position:absolute; bottom:80px; left:18px; right:18px; z-index:20; text-align:center;
-      background:rgba(0,0,0,.65); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.08);
-      border-radius:14px; padding:12px 16px; font-size:14px; font-weight:500; color:var(--text);
-      transition:color .25s, border-color .25s; }
-    .guide-pill.warn  { color:#ff8888; border-color:rgba(217,96,96,.4); }
-    .guide-pill.ready { color:var(--gold); border-color:var(--gold-d); }
-    .countdown { position:absolute; inset:0; z-index:30; display:flex; align-items:center;
-      justify-content:center; flex-direction:column; pointer-events:none; opacity:0; transition:opacity .15s; }
-    .countdown.show { opacity:1; }
-    .cnt-num { font-size:130px; font-weight:100; color:var(--gold);
-      text-shadow:0 0 80px rgba(201,168,76,.9); animation:cnt-pop .85s ease-out forwards; }
-    @keyframes cnt-pop { 0%{transform:scale(1.5);opacity:0} 18%{transform:scale(1);opacity:1} 80%{opacity:1} 100%{opacity:0;transform:scale(.9)} }
-    .cnt-cheese { font-size:28px; letter-spacing:6px; color:var(--gold); font-weight:100; }
-    .cam-bottom { position:absolute; bottom:0; left:0; right:0;
-      padding:16px 28px calc(16px + var(--sab));
-      background:rgba(0,0,0,.88); backdrop-filter:blur(20px);
-      display:flex; align-items:center; justify-content:space-between; }
-    .btn-icon { width:50px; height:50px; border-radius:14px; background:var(--s2);
-      border:1px solid rgba(255,255,255,.07); color:var(--dim); font-size:20px;
-      display:flex; align-items:center; justify-content:center; cursor:pointer; }
-    .btn-shutter { width:72px; height:72px; border-radius:50%; background:transparent;
-      border:2.5px solid rgba(201,168,76,.4); position:relative; cursor:pointer; transition:border-color .3s; }
-    .btn-shutter::after { content:''; position:absolute; width:58px; height:58px; border-radius:50%;
-      top:50%; left:50%; transform:translate(-50%,-50%); background:var(--gold); opacity:.12; transition:opacity .3s; }
-    .btn-shutter.ready { border-color:var(--gold); }
-    .btn-shutter.ready::after { opacity:.25; }
-    .btn-shutter:active::after { opacity:.5 !important; }
+  body {
+    background: var(--obsidian);
+    color: var(--ivory);
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
 
-    /* ══════════ PROCESSING ══════════ */
-    #s-processing { align-items:center; justify-content:center; gap:24px; padding:48px 36px; }
-    .proc-preview { width:130px; height:165px; object-fit:cover; border-radius:10px;
-      border:1px solid var(--s2); opacity:.85; }
-    .proc-logo { font-size:28px; font-weight:100; letter-spacing:12px; color:var(--gold); }
-    .spinner { width:30px; height:30px; border:1.5px solid var(--s2); border-top-color:var(--gold);
-      border-radius:50%; animation:spin .75s linear infinite; }
-    @keyframes spin { to { transform:rotate(360deg); } }
-    .proc-stage { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); text-align:center; }
-    .prog-track { width:180px; height:1px; background:var(--s2); border-radius:1px; overflow:hidden; }
-    .prog-fill { height:100%; background:var(--gold); border-radius:1px; transition:width .5s ease; width:0%; }
+  /* ─── NAV ─────────────────────────────────────────────────── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 48px;
+    background: rgba(13,13,15,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
 
-    /* ══════════ RESULTS ══════════ */
-    #s-results { overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(88px + var(--sab)); }
-    .res-header { padding:calc(22px + var(--sat)) 22px 18px;
-      background:linear-gradient(to bottom, var(--s1) 0%, transparent 100%);
-      display:flex; align-items:flex-start; justify-content:space-between; }
-    .res-eyebrow { font-size:10px; letter-spacing:5px; color:var(--dim); text-transform:uppercase; }
-    .res-style { font-size:26px; font-weight:100; color:var(--gold); letter-spacing:2px; margin-top:3px; }
-    .btn-sm { background:transparent; border:1px solid var(--s2); border-radius:20px;
-      padding:7px 14px; color:var(--dim); font-size:11px; letter-spacing:1px; cursor:pointer;
-      white-space:nowrap; margin-top:4px; }
-    .chips-row { display:flex; gap:8px; padding:0 22px 2px; overflow-x:auto;
-      -webkit-overflow-scrolling:touch; scrollbar-width:none; }
-    .chips-row::-webkit-scrollbar { display:none; }
-    .chip { flex-shrink:0; background:var(--s2); border:1px solid rgba(201,168,76,.18);
-      border-radius:20px; padding:7px 14px; font-size:11px; letter-spacing:1px; color:var(--dim);
-      cursor:pointer; transition:all .2s; white-space:nowrap; text-transform:capitalize; }
-    .chip.active { background:rgba(201,168,76,.12); border-color:var(--gold); color:var(--gold); }
-    .cmp-labels { display:flex; justify-content:space-between; padding:12px 22px 6px;
-      font-size:10px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; }
-    .cmp-wrap { padding:0 22px; }
-    .cmp-container { position:relative; border-radius:12px; overflow:hidden; aspect-ratio:3/4; background:var(--s1); }
-    .cmp-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-    .cmp-after { clip-path:inset(0 50% 0 0); }
-    .cmp-slider { position:absolute; top:0; bottom:0; left:50%; width:2px;
-      background:rgba(255,255,255,.9); cursor:ew-resize; z-index:10; transform:translateX(-50%); }
-    .cmp-handle { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-      width:38px; height:38px; border-radius:50%; background:#fff;
-      border:2px solid rgba(0,0,0,.15); display:flex; align-items:center;
-      justify-content:center; font-size:15px; user-select:none; color:#333;
-      box-shadow:0 2px 12px rgba(0,0,0,.35); }
-    .style-loading { position:absolute; inset:0; z-index:5; background:rgba(8,6,4,.7);
-      backdrop-filter:blur(4px); border-radius:12px; display:none;
-      align-items:center; justify-content:center; }
-    .style-loading.show { display:flex; }
-    .analysis { margin:14px 22px; background:var(--s1); border-radius:12px;
-      border:1px solid rgba(201,168,76,.12); padding:18px; }
-    .a-label { font-size:9px; letter-spacing:5px; color:var(--gold); text-transform:uppercase; margin-bottom:14px; }
-    .a-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px 8px; margin-bottom:14px; }
-    .a-key { font-size:9px; letter-spacing:2px; color:var(--dim); text-transform:uppercase; margin-bottom:3px; }
-    .a-val { font-size:13px; color:var(--text); font-weight:500; text-transform:capitalize; }
-    .a-rule { height:1px; background:rgba(255,255,255,.05); margin:3px 0 12px; }
-    .a-reason { font-size:13px; line-height:1.75; color:var(--dim); }
-    .res-actions { padding:16px 22px 8px; display:flex; flex-direction:column; gap:10px; }
-    .btn-save { background:var(--gold); color:#000; font-size:12px; font-weight:700;
-      letter-spacing:2px; text-transform:uppercase; border:none; border-radius:3px;
-      padding:15px; cursor:pointer; width:100%; }
-    .btn-routine-cta { background:rgba(201,168,76,.1); color:var(--gold);
-      font-size:12px; letter-spacing:2px; text-transform:uppercase;
-      border:1px solid var(--gold-d); border-radius:3px; padding:13px; cursor:pointer; width:100%; }
+  .nav-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    color: var(--ivory);
+    text-decoration: none;
+  }
 
-    /* ══════════ ROUTINE ══════════ */
-    #s-routine { overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(88px + var(--sab)); }
-    .rtn-header { padding:calc(20px + var(--sat)) 22px 16px;
-      background:linear-gradient(to bottom, var(--s1) 0%, transparent 100%); }
-    .rtn-eyebrow { font-size:10px; letter-spacing:5px; color:var(--dim); text-transform:uppercase; }
-    .rtn-title { font-size:26px; font-weight:100; color:var(--gold); letter-spacing:2px; margin-top:2px; }
+  .nav-logo span { color: var(--gold); font-style: italic; }
 
-    /* Score gauge */
-    .gauge-wrap { display:flex; flex-direction:column; align-items:center; padding:8px 22px 0; }
-    .gauge-card { background:var(--s1); border-radius:16px; border:1px solid rgba(201,168,76,.12);
-      padding:24px; width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; }
-    .gauge-svg { width:200px; height:110px; overflow:visible; }
-    .gauge-track { fill:none; stroke:var(--s2); stroke-width:14; stroke-linecap:round; }
-    .gauge-fill { fill:none; stroke:var(--gold); stroke-width:14; stroke-linecap:round;
-      stroke-dasharray:220; stroke-dashoffset:220; transition:stroke-dashoffset 1.2s ease, stroke .5s; }
-    .gauge-fill.amber { stroke:#e8a030; }
-    .gauge-fill.low   { stroke:#c06040; }
-    .gauge-num { font-size:38px; font-weight:100; fill:var(--gold); text-anchor:middle; dominant-baseline:middle; }
-    .gauge-tag { font-size:9px; fill:var(--dim); text-anchor:middle; letter-spacing:3px; }
-    .streak-row { display:flex; gap:10px; width:100%; justify-content:center; }
-    .streak-box { flex:1; background:var(--s2); border-radius:10px; padding:12px; text-align:center;
-      border:1px solid rgba(255,255,255,.05); }
-    .streak-num   { font-size:22px; font-weight:100; color:var(--gold); }
-    .streak-label { font-size:9px; letter-spacing:2px; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+  .nav-links {
+    display: flex; gap: 32px; list-style: none;
+  }
 
-    /* Section heads and tasks */
-    .section-head { display:flex; align-items:center; justify-content:space-between; padding:20px 22px 10px; }
-    .section-title { font-size:10px; letter-spacing:4px; color:var(--dim); text-transform:uppercase; }
-    .task-list { display:flex; flex-direction:column; gap:8px; padding:0 22px; }
-    .task-card { display:flex; align-items:center; gap:14px; background:var(--s1); border-radius:12px;
-      padding:14px 16px; border:1px solid rgba(255,255,255,.05); cursor:pointer;
-      transition:border-color .25s, transform .15s; position:relative; overflow:hidden; }
-    .task-card:active { transform:scale(.985); }
-    .task-card.done   { opacity:.55; border-color:rgba(201,168,76,.2); }
-    .task-card.overdue { border-color:rgba(217,96,96,.3); }
-    .task-card.due     { border-color:rgba(201,168,76,.3); }
-    .task-ico { width:40px; height:40px; border-radius:10px; background:var(--s2);
-      display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
-    .task-ico.done-ico { background:rgba(201,168,76,.15); }
-    .task-body { flex:1; min-width:0; }
-    .task-name { font-size:14px; color:var(--text); font-weight:500; }
-    .task-card.done .task-name { text-decoration:line-through; color:var(--dim); }
-    .task-meta { font-size:11px; color:var(--dim); margin-top:2px; }
-    .task-meta.overdue { color:var(--danger); }
-    .task-meta.due     { color:var(--gold); }
-    .task-check { width:24px; height:24px; border-radius:50%; border:1.5px solid var(--s2);
-      flex-shrink:0; display:flex; align-items:center; justify-content:center;
-      font-size:13px; transition:all .25s; }
-    .task-card.done .task-check { background:var(--gold); border-color:var(--gold); color:#000; }
-    .task-pts { font-size:12px; font-weight:700; color:var(--gold); position:absolute; right:18px;
-      pointer-events:none; opacity:0; animation:pts-pop .7s ease-out forwards; }
-    @keyframes pts-pop { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-32px)} }
+  .nav-links a {
+    color: var(--ivory-dim);
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
 
-    /* Notif banner */
-    .notif-banner { margin:12px 22px 0; background:rgba(201,168,76,.07);
-      border:1px solid var(--gold-d); border-radius:12px; padding:14px 16px;
-      display:flex; align-items:center; gap:12px; cursor:pointer; }
-    .notif-banner.hide { display:none; }
-    .notif-text { flex:1; font-size:12px; color:var(--dim); line-height:1.5; }
-    .notif-text strong { color:var(--gold); display:block; margin-bottom:2px; font-size:13px; }
-    .btn-notif { background:var(--gold); color:#000; font-size:10px; font-weight:700;
-      letter-spacing:1px; border:none; border-radius:20px; padding:7px 14px; cursor:pointer; white-space:nowrap; }
+  .nav-links a:hover { color: var(--ivory); }
 
-    /* Salon booking card */
-    .salon-card { margin:14px 22px; background:var(--s1); border-radius:12px;
-      border:1px solid rgba(201,168,76,.12); padding:18px;
-      display:flex; align-items:center; gap:14px; cursor:pointer; }
-    .salon-ico { width:44px; height:44px; border-radius:12px; background:rgba(201,168,76,.1);
-      display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
-    .salon-body { flex:1; }
-    .salon-title { font-size:14px; color:var(--text); font-weight:500; }
-    .salon-sub   { font-size:11px; color:var(--dim); margin-top:2px; }
-    .salon-arrow { color:var(--gold); font-size:18px; }
+  .nav-badge {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--gold);
+    border: 1px solid var(--gold-dim);
+    padding: 4px 12px;
+    border-radius: 2px;
+  }
 
-    /* Insight tip */
-    .tip-card { margin:0 22px 14px; background:var(--s2); border-radius:12px;
-      border:1px solid rgba(255,255,255,.05); padding:14px 16px;
-      display:flex; align-items:flex-start; gap:12px; }
-    .tip-ico  { font-size:18px; flex-shrink:0; margin-top:1px; }
-    .tip-text { font-size:12px; color:var(--dim); line-height:1.65; }
-    .tip-text strong { color:var(--text); display:block; margin-bottom:3px; font-size:13px; }
+  /* ─── HERO ────────────────────────────────────────────────── */
+  .hero {
+    padding: 160px 48px 80px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
 
-    /* Empty state */
-    .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center;
-      padding:60px 36px; gap:16px; text-align:center; }
-    .empty-ico { font-size:48px; opacity:.35; }
-    .empty-title { font-size:18px; font-weight:100; color:var(--dim); letter-spacing:2px; }
-    .empty-sub { font-size:13px; color:var(--dim); line-height:1.7; max-width:240px; opacity:.7; }
+  .hero-copy h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(52px, 6vw, 88px);
+    font-weight: 300;
+    line-height: 1.0;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+  }
 
-    /* ══════════ BADGES ══════════ */
-    #s-badges { overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(88px + var(--sab)); }
-    .bdg-header { padding:calc(20px + var(--sat)) 22px 16px;
-      background:linear-gradient(to bottom, var(--s1) 0%, transparent 100%); }
-    .bdg-eyebrow { font-size:10px; letter-spacing:5px; color:var(--dim); text-transform:uppercase; }
-    .bdg-title   { font-size:26px; font-weight:100; color:var(--gold); letter-spacing:2px; margin-top:2px; }
-    .bdg-count   { font-size:12px; color:var(--dim); margin-top:4px; }
+  .hero-copy h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
 
-    /* Level bar */
-    .level-bar { margin:0 22px 16px; background:var(--s1); border-radius:12px;
-      border:1px solid rgba(201,168,76,.12); padding:16px 18px; }
-    .level-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .level-name { font-size:13px; color:var(--gold); font-weight:500; }
-    .level-xp   { font-size:11px; color:var(--dim); }
-    .level-track { height:3px; background:var(--s2); border-radius:2px; overflow:hidden; }
-    .level-fill  { height:100%; background:var(--gold); border-radius:2px; transition:width 1s ease; }
+  .hero-copy h1 .line-dim {
+    color: var(--ivory-dim);
+    font-size: 0.72em;
+    display: block;
+    margin-top: 4px;
+  }
 
-    .bdg-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:4px 22px 20px; }
-    .bdg-card { background:var(--s1); border-radius:14px; padding:20px 14px;
-      text-align:center; border:1px solid rgba(255,255,255,.05);
-      transition:all .3s; opacity:.3; filter:grayscale(1); }
-    .bdg-card.earned { opacity:1; filter:none; border-color:rgba(201,168,76,.25);
-      box-shadow:0 0 20px rgba(201,168,76,.07); }
-    .bdg-icon { font-size:36px; margin-bottom:8px; }
-    .bdg-name { font-size:12px; font-weight:600; color:var(--dim); margin-bottom:4px; }
-    .bdg-card.earned .bdg-name { color:var(--gold); }
-    .bdg-desc { font-size:10px; color:var(--dim); line-height:1.5; }
-    .bdg-card.earned .bdg-desc { color:var(--dim); }
-    .bdg-date { font-size:9px; color:var(--gold); margin-top:6px; opacity:.7; letter-spacing:1px; }
+  .hero-copy p {
+    color: var(--ivory-dim);
+    font-size: 16px;
+    max-width: 420px;
+    margin-bottom: 36px;
+    line-height: 1.8;
+  }
 
-    /* ══════════ TOAST ══════════ */
-    .toast { position:fixed; bottom:calc(90px + var(--sab)); left:50%; transform:translateX(-50%);
-      background:rgba(8,6,4,.94); backdrop-filter:blur(16px);
-      border:1px solid rgba(255,255,255,.1); border-radius:20px;
-      color:var(--text); font-size:13px; padding:11px 20px; z-index:200;
-      opacity:0; pointer-events:none; transition:opacity .3s; white-space:nowrap; }
-    .toast.show { opacity:1; }
+  .hero-cta {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: var(--gold);
+    color: var(--obsidian);
+    padding: 14px 32px;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    text-decoration: none;
+  }
 
-    /* Celebrate flash */
-    .celebrate { position:fixed; inset:0; z-index:100; pointer-events:none;
-      background:rgba(201,168,76,.1); opacity:0; }
-    .celebrate.pop { animation:cel .55s ease-out; }
-    @keyframes cel { 0%{opacity:1} 100%{opacity:0} }
+  .hero-cta:hover { background: #E8BC6A; transform: translateY(-1px); }
 
-    /* Badge unlock overlay */
-    .bdg-unlock { position:fixed; inset:0; z-index:150; display:flex; align-items:center;
-      justify-content:center; background:rgba(0,0,0,.75); backdrop-filter:blur(12px);
-      opacity:0; pointer-events:none; transition:opacity .3s; }
-    .bdg-unlock.show { opacity:1; pointer-events:all; }
-    .bdg-unlock-card { background:var(--s1); border:1px solid rgba(201,168,76,.3);
-      border-radius:20px; padding:36px 32px; text-align:center; max-width:260px;
-      animation:bdg-in .4s cubic-bezier(.34,1.56,.64,1) both; }
-    @keyframes bdg-in { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
-    .bdg-unlock-ico  { font-size:64px; margin-bottom:12px; }
-    .bdg-unlock-eyebrow { font-size:9px; letter-spacing:5px; color:var(--gold); text-transform:uppercase; margin-bottom:8px; }
-    .bdg-unlock-name { font-size:22px; font-weight:100; color:var(--text); letter-spacing:2px; margin-bottom:8px; }
-    .bdg-unlock-desc { font-size:13px; color:var(--dim); line-height:1.6; margin-bottom:20px; }
-    .bdg-unlock-close { background:var(--gold); color:#000; font-size:11px; font-weight:700;
-      letter-spacing:2px; text-transform:uppercase; border:none; border-radius:2px;
-      padding:13px 32px; cursor:pointer; width:100%; }
-  </style>
+  .hero-cta svg { width: 16px; height: 16px; }
+
+  .hero-visual {
+    position: relative;
+    height: 520px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    background: var(--obsidian2);
+  }
+
+  .hero-visual-inner {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    color: var(--ivory-dim);
+  }
+
+  .hero-visual-icon {
+    width: 56px; height: 56px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .hero-visual-icon svg { width: 24px; height: 24px; opacity: 0.5; }
+
+  .hero-visual-label {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.5;
+  }
+
+  .pipeline-stages {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    border-top: 1px solid var(--border);
+  }
+
+  .stage {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    opacity: 0.4;
+    border-right: 1px solid var(--border);
+  }
+
+  .stage:last-child { border-right: none; }
+  .stage.active { opacity: 1; color: var(--gold); }
+
+  /* ─── DIVIDER ─────────────────────────────────────────────── */
+  .section-divider {
+    max-width: 1280px; margin: 0 auto;
+    padding: 0 48px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── APP SECTION ─────────────────────────────────────────── */
+  #app {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 80px 48px;
+  }
+
+  .section-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 40px;
+    font-weight: 300;
+    margin-bottom: 48px;
+    line-height: 1.15;
+  }
+
+  .section-title em { font-style: italic; color: var(--rose); }
+
+  /* ─── APP LAYOUT ──────────────────────────────────────────── */
+  .app-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    min-height: 720px;
+  }
+
+  .panel {
+    background: var(--obsidian2);
+    padding: 32px;
+  }
+
+  .panel-title {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ─── UPLOAD ZONE ─────────────────────────────────────────── */
+  .upload-zone {
+    border: 1px dashed var(--border);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--gold);
+    background: rgba(212, 168, 83, 0.04);
+  }
+
+  .upload-zone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .upload-icon {
+    width: 40px; height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+  }
+
+  .upload-icon svg { width: 18px; height: 18px; opacity: 0.6; color: var(--ivory); }
+
+  .upload-text {
+    font-size: 13px;
+    color: var(--ivory-dim);
+    margin-bottom: 4px;
+  }
+
+  .upload-sub {
+    font-size: 11px;
+    color: var(--ivory-dim);
+    opacity: 0.5;
+    letter-spacing: 0.06em;
+  }
+
+  /* ─── PREVIEW THUMB ───────────────────────────────────────── */
+  .thumb-preview {
+    display: none;
+    position: relative;
+    margin-bottom: 24px;
+  }
+
+  .thumb-preview.visible { display: block; }
+
+  .thumb-preview img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+  }
+
+  .thumb-clear {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(13,13,15,0.85);
+    border: 1px solid var(--border);
+    color: var(--ivory-dim);
+    width: 28px; height: 28px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    transition: color 0.15s;
+  }
+
+  .thumb-clear:hover { color: var(--ivory); }
+
+  /* ─── ANALYZE RESULT ──────────────────────────────────────── */
+  .analysis-card {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .analysis-card.visible { display: block; }
+
+  .analysis-row {
+    display: flex; justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  .analysis-row:last-child { margin-bottom: 0; }
+
+  .analysis-label {
+    color: var(--ivory-dim);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .analysis-value {
+    color: var(--ivory);
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  /* ─── STYLE SELECTOR ──────────────────────────────────────── */
+  .style-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 24px;
+    max-height: 240px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .style-chip {
+    padding: 10px 12px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--ivory-dim);
+    cursor: pointer;
+    text-align: left;
+    letter-spacing: 0.04em;
+    transition: all 0.15s;
+    line-height: 1.3;
+  }
+
+  .style-chip:hover {
+    border-color: var(--gold-dim);
+    color: var(--ivory);
+  }
+
+  .style-chip.selected {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: rgba(212, 168, 83, 0.08);
+  }
+
+  /* ─── CUSTOM REQUEST ──────────────────────────────────────── */
+  .field-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .field-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--ivory);
+    padding: 10px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 300;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 16px;
+    resize: none;
+  }
+
+  .field-input:focus { border-color: var(--gold-dim); }
+  .field-input::placeholder { color: var(--ivory-dim); opacity: 0.4; }
+
+  /* ─── PARAMS ──────────────────────────────────────────────── */
+  .params-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .param-group label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    display: flex; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .param-group label span {
+    color: var(--gold);
+    font-style: italic;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .param-range {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .param-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--gold);
+    cursor: pointer;
+  }
+
+  /* ─── GENERATE BTN ────────────────────────────────────────── */
+  .btn-generate {
+    width: 100%;
+    background: var(--gold);
+    color: var(--obsidian);
+    border: none;
+    padding: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+
+  .btn-generate:hover:not(:disabled) { background: #E8BC6A; }
+  .btn-generate:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-analyze {
+    width: 100%;
+    background: transparent;
+    color: var(--ivory-dim);
+    border: 1px solid var(--border);
+    padding: 11px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+
+  .btn-analyze:hover:not(:disabled) { border-color: var(--gold-dim); color: var(--ivory); }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ─── STATUS BAR ──────────────────────────────────────────── */
+  .status-bar {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--ivory-dim);
+    display: flex; align-items: center; gap: 8px;
+    min-height: 20px;
+    margin-top: 8px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+
+  .status-dot.running { background: var(--gold); animation: pulse 1.2s infinite; }
+  .status-dot.success { background: var(--success); }
+  .status-dot.error   { background: var(--error); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  /* ─── RESULT PANEL ────────────────────────────────────────── */
+  .result-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .result-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+
+  .view-tab {
+    padding: 8px 20px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -17px;
+    transition: all 0.15s;
+  }
+
+  .view-tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+  }
+
+  .view-tab:hover:not(.active) { color: var(--ivory); }
+
+  .result-spacer { flex: 1; }
+
+  .btn-download {
+    padding: 8px 18px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    background: transparent;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+    align-items: center; gap: 6px;
+  }
+
+  .btn-download.visible { display: flex; }
+  .btn-download:hover { border-color: var(--gold-dim); color: var(--ivory); }
+  .btn-download svg { width: 13px; height: 13px; }
+
+  /* ─── COMPARE VIEWER ──────────────────────────────────────── */
+  .compare-area {
+    flex: 1;
+    position: relative;
+    min-height: 440px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .compare-placeholder {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    color: var(--ivory-dim);
+  }
+
+  .compare-placeholder svg { width: 48px; height: 48px; opacity: 0.2; }
+
+  .compare-placeholder p {
+    font-size: 13px;
+    opacity: 0.5;
+    text-align: center;
+    max-width: 260px;
+    line-height: 1.6;
+  }
+
+  /* Side-by-side view */
+  .sbs-view {
+    display: none;
+    height: 100%;
+    gap: 2px;
+  }
+
+  .sbs-view.active { display: grid; grid-template-columns: 1fr 1fr; }
+
+  .sbs-pane {
+    position: relative;
+    overflow: hidden;
+    background: var(--obsidian);
+  }
+
+  .sbs-pane img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .sbs-label {
+    position: absolute;
+    bottom: 12px; left: 12px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(245,240,232,0.7);
+    background: rgba(13,13,15,0.7);
+    padding: 4px 10px;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Slider compare view */
+  .slider-view {
+    display: none;
+    height: 100%;
+    position: relative;
+    cursor: ew-resize;
+    user-select: none;
+  }
+
+  .slider-view.active { display: block; }
+
+  .slider-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  .slider-clip {
+    position: absolute; inset: 0;
+    overflow: hidden;
+  }
+
+  .slider-clip img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  .slider-handle {
+    position: absolute; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--gold);
+    cursor: ew-resize;
+    z-index: 10;
+  }
+
+  .slider-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--obsidian);
+    box-shadow: 0 0 0 1px var(--gold);
+  }
+
+  /* ─── REASONING CARD ──────────────────────────────────────── */
+  .reasoning-card {
+    display: none;
+    margin-top: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .reasoning-card.visible { display: block; }
+
+  .reasoning-card-title {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+  }
+
+  .reasoning-card p {
+    font-size: 13px;
+    color: var(--ivory-dim);
+    line-height: 1.7;
+  }
+
+  .reasoning-tags {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 12px;
+  }
+
+  .reasoning-tag {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--lavender);
+    letter-spacing: 0.06em;
+    text-transform: capitalize;
+  }
+
+  /* ─── PIPELINE STEPS ──────────────────────────────────────── */
+  .pipeline-log {
+    display: none;
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    background: #0A0A0D;
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Mono', monospace;
+    font-size: 11px;
+    color: var(--ivory-dim);
+    max-height: 160px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+
+  .pipeline-log.visible { display: block; }
+  .log-step { color: var(--ivory-dim); }
+  .log-step.done { color: var(--success); }
+  .log-step.running { color: var(--gold); }
+  .log-step.pending { color: var(--border); }
+
+  /* ─── HOW IT WORKS ────────────────────────────────────────── */
+  #how-it-works {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 80px 48px;
+    border-top: 1px solid var(--border);
+  }
+
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    margin-top: 48px;
+  }
+
+  .how-step {
+    padding: 32px 24px;
+    border-left: 1px solid var(--border);
+    position: relative;
+  }
+
+  .how-step:first-child { border-left: none; }
+
+  .how-number {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 48px;
+    font-weight: 300;
+    color: var(--border);
+    line-height: 1;
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  .how-step-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ivory);
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+
+  .how-step-desc {
+    font-size: 12px;
+    color: var(--ivory-dim);
+    line-height: 1.7;
+    opacity: 0.7;
+  }
+
+  .how-connector {
+    position: absolute; top: 56px; right: -1px;
+    width: 1px; height: 1px;
+  }
+
+  /* ─── STYLES SHOWCASE ─────────────────────────────────────── */
+  #styles {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 80px 48px;
+    border-top: 1px solid var(--border);
+  }
+
+  .styles-scroll {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-top: 40px;
+    overflow-x: auto;
+    min-width: 0;
+  }
+
+  .style-card {
+    background: var(--surface);
+    padding: 20px 16px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .style-card:hover { border-color: var(--gold-dim); }
+
+  .style-card-icon {
+    width: 40px; height: 40px;
+    background: var(--obsidian);
+    border-radius: 50%;
+    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .style-card-icon svg { width: 20px; height: 20px; color: var(--lavender); }
+
+  .style-card-name {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+    text-transform: capitalize;
+  }
+
+  .style-card-desc {
+    font-size: 11px;
+    color: var(--ivory-dim);
+    opacity: 0.6;
+    line-height: 1.4;
+  }
+
+  /* ─── FOOTER ──────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  .footer-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: var(--ivory-dim);
+  }
+
+  .footer-logo span { color: var(--gold); font-style: italic; }
+
+  .footer-note {
+    font-size: 12px;
+    color: var(--ivory-dim);
+    opacity: 0.4;
+    letter-spacing: 0.04em;
+  }
+
+  .footer-pipeline {
+    font-size: 11px;
+    color: var(--lavender);
+    opacity: 0.6;
+    letter-spacing: 0.08em;
+  }
+
+  /* ─── API CONFIG MODAL ────────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(13,13,15,0.92);
+    align-items: center; justify-content: center;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--obsidian2);
+    border: 1px solid var(--border);
+    padding: 40px;
+    max-width: 480px;
+    width: 100%;
+  }
+
+  .modal-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px;
+    font-weight: 300;
+    margin-bottom: 8px;
+  }
+
+  .modal-sub {
+    font-size: 13px;
+    color: var(--ivory-dim);
+    margin-bottom: 28px;
+    line-height: 1.6;
+  }
+
+  .modal-save {
+    width: 100%;
+    background: var(--gold);
+    color: var(--obsidian);
+    border: none;
+    padding: 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.15s;
+  }
+
+  .modal-save:hover { background: #E8BC6A; }
+
+  .modal-skip {
+    width: 100%;
+    background: transparent;
+    color: var(--ivory-dim);
+    border: none;
+    padding: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: color 0.15s;
+  }
+
+  .modal-skip:hover { color: var(--ivory); }
+
+  /* ─── LOADING OVERLAY ─────────────────────────────────────── */
+  .loading-overlay {
+    display: none;
+    position: absolute; inset: 0; z-index: 20;
+    background: rgba(13,13,15,0.88);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 20px;
+    backdrop-filter: blur(4px);
+  }
+
+  .loading-overlay.active { display: flex; }
+
+  .loading-spinner {
+    width: 40px; height: 40px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+  }
+
+  .loading-step {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+    font-style: italic;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+  }
+
+  /* ─── RESPONSIVE ──────────────────────────────────────────── */
+  @media (max-width: 1024px) {
+    .hero { grid-template-columns: 1fr; gap: 40px; }
+    .hero-visual { height: 320px; }
+    .app-grid { grid-template-columns: 1fr; }
+    .how-grid { grid-template-columns: 1fr 1fr; }
+    .styles-scroll { grid-template-columns: repeat(4, 1fr); }
+    nav { padding: 16px 24px; }
+    .nav-links { display: none; }
+    .hero, #app, #how-it-works, #styles { padding-left: 24px; padding-right: 24px; }
+    footer { padding: 24px; }
+  }
+
+  @media (max-width: 640px) {
+    .how-grid { grid-template-columns: 1fr; }
+    .styles-scroll { grid-template-columns: repeat(2, 1fr); }
+    .params-row { grid-template-columns: 1fr; }
+  }
+
+  /* ─── AGENT CARDS ────────────────────────────────────────── */
+  .agent-card {
+    display: none;
+    margin-top: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+  }
+
+  .agent-card.visible { display: block; }
+
+  .agent-card-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .agent-icon {
+    width: 24px; height: 24px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    flex-shrink: 0;
+  }
+
+  .planner-icon  { background: rgba(155, 143, 174, 0.2); color: var(--lavender); border: 1px solid var(--lavender); }
+  .reviewer-icon { background: rgba(107, 191, 142, 0.15); color: var(--success);  border: 1px solid var(--success); }
+
+  .agent-card-title {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    flex: 1;
+  }
+
+  .agent-confidence {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    color: var(--lavender);
+    font-style: italic;
+  }
+
+  .agent-score {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--gold);
+  }
+
+  .agent-card-reasoning {
+    font-size: 12px;
+    color: var(--ivory-dim);
+    line-height: 1.7;
+    opacity: 0.8;
+    margin-bottom: 10px;
+  }
+
+  .agent-params {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+
+  .agent-param {
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--ivory-dim);
+    letter-spacing: 0.04em;
+  }
+
+  .agent-param span { color: var(--gold); margin-left: 4px; font-family: 'Cormorant Garamond', serif; font-size: 13px; }
+
+  .reviewer-checks {
+    display: flex; gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .reviewer-check {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  .check-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+  }
+
+  .check-dot.pass { background: var(--success); }
+  .check-dot.fail { background: var(--error); }
+
+  .reviewer-issues {
+    display: flex; flex-direction: column; gap: 4px;
+    margin-top: 6px;
+  }
+
+  .reviewer-issue {
+    font-size: 11px;
+    color: var(--error);
+    opacity: 0.8;
+    padding-left: 12px;
+    position: relative;
+  }
+
+  .reviewer-issue::before {
+    content: '!';
+    position: absolute; left: 0;
+    color: var(--error);
+    font-weight: 600;
+  }
+
+  /* ─── MEDIAPIPE MASK PREVIEW ─────────────────────────────── */
+  .mp-mask-row {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .mp-mask-row.visible { display: flex; }
+
+  .mp-canvas-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 72px; height: 72px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    background: var(--obsidian);
+  }
+
+  .mp-canvas-wrap canvas {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .mp-mask-info { flex: 1; min-width: 0; }
+
+  .mp-mask-title {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  .mp-mask-desc {
+    font-size: 11px;
+    color: var(--ivory-dim);
+    opacity: 0.7;
+    line-height: 1.5;
+  }
+
+  .mp-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px;
+    color: var(--ivory-dim);
+    cursor: pointer;
+    margin-top: 6px;
+  }
+
+  .mp-toggle input[type="checkbox"] {
+    accent-color: var(--gold);
+    cursor: pointer;
+    width: 13px; height: 13px;
+  }
+
+  /* ─── TOAST ───────────────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 32px; right: 32px; z-index: 999;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--ivory);
+    max-width: 320px;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.25s;
+    pointer-events: none;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.toast-error { border-left-color: var(--error); }
+</style>
 </head>
 <body>
 
-<!-- ══ WELCOME ══ -->
-<div id="s-welcome" class="screen active">
-  <div class="wlc-logo">ÉLUME</div>
-  <div class="wlc-sub">AI Hair Try-On</div>
-  <div class="wlc-rule"></div>
-  <p class="wlc-desc">Your face, your style. AI analyses your unique features and shows hairstyles made for you — before you commit to them.</p>
-  <button class="btn-gold" onclick="App.startCamera()">Start</button>
-  <button class="btn-ghost" onclick="document.getElementById('file-input').click()">Upload Photo</button>
-  <input type="file" id="file-input" accept="image/*" onchange="App.handleUpload(event)">
-  <button class="btn-install" id="btn-install" onclick="App.installPWA()">⬇ Install App</button>
-  <div class="ios-tip" id="ios-tip">
-    <div style="font-size:22px">📲</div>
-    <div class="ios-tip-text"><strong>Install ÉLUME</strong>Tap the Share button below, then "Add to Home Screen".</div>
+<!-- API CONFIG MODAL -->
+<div class="modal-overlay" id="configModal">
+  <div class="modal">
+    <div class="modal-title">Connect to Élume</div>
+    <p class="modal-sub">Enter your Élume v5 API URL — the ngrok tunnel from your Kaggle notebook. It looks like <code style="color:var(--gold);font-size:12px">https://xxxx.ngrok-free.app</code></p>
+    <label class="field-label" for="apiUrlInput">API Endpoint</label>
+    <input class="field-input" type="text" id="apiUrlInput" placeholder="https://your-tunnel.ngrok-free.app" />
+    <button class="modal-save" onclick="saveConfig()">Connect</button>
+    <button class="modal-skip" onclick="skipConfig()">Use Demo Mode (no backend)</button>
   </div>
 </div>
 
-<!-- ══ CAMERA ══ -->
-<div id="s-camera" class="screen">
-  <div class="cam-wrap">
-    <video id="video" playsinline muted autoplay></video>
-    <canvas id="overlay-canvas"></canvas>
-    <div class="face-oval" id="face-oval"></div>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
-    <!-- directional arrows -->
-    <div class="arrows">
-      <div class="arr up"    id="arr-up">↑</div>
-      <div class="arr down"  id="arr-down">↓</div>
-      <div class="arr left"  id="arr-left">←</div>
-      <div class="arr right" id="arr-right">→</div>
-    </div>
-
-    <!-- top bar -->
-    <div class="cam-top">
-      <span class="cam-brand">ÉLUME</span>
-      <div class="btn-icon" onclick="App.switchCamera()" style="width:38px;height:38px;font-size:16px">⟳</div>
-    </div>
-
-    <!-- checklist -->
-    <div class="checklist">
-      <div class="chk" id="chk-face"><div class="chk-dot"></div>Face</div>
-      <div class="chk" id="chk-center"><div class="chk-dot"></div>Centred</div>
-      <div class="chk" id="chk-dist"><div class="chk-dot"></div>Distance</div>
-      <div class="chk" id="chk-level"><div class="chk-dot"></div>Level</div>
-      <div class="chk" id="chk-light"><div class="chk-dot"></div>Lighting</div>
-      <div class="chk" id="chk-hair"><div class="chk-dot"></div>Hair clear</div>
-    </div>
-
-    <!-- guide pill -->
-    <div class="guide-pill" id="guide-pill">Position your face in the oval</div>
-
-    <!-- countdown -->
-    <div class="countdown" id="countdown">
-      <div class="cnt-num" id="cnt-num"></div>
-      <div class="cnt-cheese" id="cnt-cheese"></div>
-    </div>
-  </div>
-
-  <div class="cam-bottom">
-    <div class="btn-icon" onclick="document.getElementById('file-input').click()">🖼</div>
-    <button class="btn-shutter" id="btn-shutter" onclick="App.manualCapture()"></button>
-    <div class="btn-icon" id="btn-torch" onclick="App.toggleTorch()">🔦</div>
-  </div>
-</div>
-
-<!-- ══ PROCESSING ══ -->
-<div id="s-processing" class="screen">
-  <img class="proc-preview" id="proc-preview" src="" alt="">
-  <div class="proc-logo">ÉLUME</div>
-  <div class="spinner"></div>
-  <div class="proc-stage" id="proc-stage">Analysing your features…</div>
-  <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
-</div>
-
-<!-- ══ RESULTS ══ -->
-<div id="s-results" class="screen">
-  <div class="res-header">
-    <div>
-      <div class="res-eyebrow">Your recommended look</div>
-      <div class="res-style" id="res-style-name">—</div>
-    </div>
-    <button class="btn-sm" onclick="App.startCamera()">Retake</button>
-  </div>
-
-  <!-- style chips -->
-  <div class="chips-row" id="style-chips"></div>
-
-  <!-- before/after slider -->
-  <div class="cmp-labels"><span>Before</span><span>After</span></div>
-  <div class="cmp-wrap">
-    <div class="cmp-container" id="cmp-container">
-      <img class="cmp-img" id="cmp-before" src="" alt="Before">
-      <img class="cmp-img cmp-after" id="cmp-after" src="" alt="After">
-      <div class="cmp-slider" id="cmp-slider">
-        <div class="cmp-handle">⇔</div>
-      </div>
-      <div class="style-loading" id="style-loading"><div class="spinner"></div></div>
-    </div>
-  </div>
-
-  <!-- analysis card -->
-  <div class="analysis">
-    <div class="a-label">Face Analysis</div>
-    <div class="a-grid">
-      <div><div class="a-key">Face Shape</div><div class="a-val" id="a-shape">—</div></div>
-      <div><div class="a-key">Skin Tone</div><div class="a-val" id="a-skin">—</div></div>
-      <div><div class="a-key">Hair Colour</div><div class="a-val" id="a-color">—</div></div>
-      <div><div class="a-key">Hair Length</div><div class="a-val" id="a-length">—</div></div>
-    </div>
-    <div class="a-rule"></div>
-    <div class="a-reason" id="a-reason">—</div>
-  </div>
-
-  <!-- actions -->
-  <div class="res-actions">
-    <button class="btn-save" onclick="App.saveResult()">Save to Gallery</button>
-    <button class="btn-routine-cta" onclick="App.goRoutine()">Build My Hair Routine →</button>
-  </div>
-</div>
-
-<!-- ══ ROUTINE ══ -->
-<div id="s-routine" class="screen">
-  <div class="rtn-header">
-    <div class="rtn-eyebrow">Daily Care</div>
-    <div class="rtn-title">My Routine</div>
-  </div>
-
-  <!-- notif banner -->
-  <div class="notif-banner" id="notif-banner">
-    <div style="font-size:22px">🔔</div>
-    <div class="notif-text">
-      <strong>Enable reminders</strong>
-      Get gentle nudges at the right time for each step.
-    </div>
-    <button class="btn-notif" onclick="App.requestNotifications()">Allow</button>
-  </div>
-
-  <!-- score gauge -->
-  <div class="gauge-wrap">
-    <div class="gauge-card">
-      <svg class="gauge-svg" viewBox="0 0 200 110">
-        <path class="gauge-track"
-          d="M 20 100 A 80 80 0 0 1 180 100"
-          stroke-dasharray="251" stroke-dashoffset="0"/>
-        <path class="gauge-fill" id="gauge-fill"
-          d="M 20 100 A 80 80 0 0 1 180 100"
-          stroke-dasharray="251" stroke-dashoffset="251"/>
-        <text class="gauge-num" id="gauge-num" x="100" y="92">—</text>
-        <text class="gauge-tag" x="100" y="108">HAIR HEALTH SCORE</text>
-      </svg>
-      <div class="streak-row">
-        <div class="streak-box">
-          <div class="streak-num" id="streak-num">0</div>
-          <div class="streak-label">Day Streak</div>
-        </div>
-        <div class="streak-box">
-          <div class="streak-num" id="xp-num">0</div>
-          <div class="streak-label">Total XP</div>
-        </div>
-        <div class="streak-box">
-          <div class="streak-num" id="done-today-num">0/0</div>
-          <div class="streak-label">Today</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- tip -->
-  <div id="daily-tip" class="tip-card" style="margin-top:14px">
-    <div class="tip-ico">💡</div>
-    <div class="tip-text"><strong>Today's tip</strong><span id="tip-text">Loading…</span></div>
-  </div>
-
-  <!-- today's tasks -->
-  <div class="section-head">
-    <div class="section-title">Today's Tasks</div>
-    <div style="font-size:11px;color:var(--dim)" id="tasks-date"></div>
-  </div>
-  <div class="task-list" id="task-list"></div>
-
-  <!-- upcoming -->
-  <div class="section-head" style="margin-top:8px">
-    <div class="section-title">Coming Up</div>
-  </div>
-  <div class="task-list" id="upcoming-list"></div>
-
-  <!-- salon booking -->
-  <div class="salon-card" onclick="App.bookSalon()">
-    <div class="salon-ico">✂️</div>
-    <div class="salon-body">
-      <div class="salon-title">Book a Salon Visit</div>
-      <div class="salon-sub">Find top-rated salons near you</div>
-    </div>
-    <div class="salon-arrow">›</div>
-  </div>
-
-  <div style="height:12px"></div>
-</div>
-
-<!-- ══ BADGES ══ -->
-<div id="s-badges" class="screen">
-  <div class="bdg-header">
-    <div class="bdg-eyebrow">Achievements</div>
-    <div class="bdg-title">Badges</div>
-    <div class="bdg-count" id="bdg-count">0 earned</div>
-  </div>
-
-  <!-- level bar -->
-  <div class="level-bar">
-    <div class="level-row">
-      <div class="level-name" id="level-name">Beginner</div>
-      <div class="level-xp" id="level-xp-text">0 / 100 XP</div>
-    </div>
-    <div class="level-track"><div class="level-fill" id="level-fill" style="width:0%"></div></div>
-  </div>
-
-  <div class="bdg-grid" id="bdg-grid"></div>
-</div>
-
-<!-- ── Bottom Nav ── -->
-<nav class="bnav">
-  <div class="bnav-tab" id="tab-tryon" onclick="App.nav('tryon')">
-    <div class="bnav-icon">✦</div>
-    <div class="bnav-label">Try-On</div>
-  </div>
-  <div class="bnav-tab" id="tab-routine" onclick="App.nav('routine')">
-    <div class="bnav-icon">◎</div>
-    <div class="bnav-label">Routine</div>
-  </div>
-  <div class="bnav-tab" id="tab-badges" onclick="App.nav('badges')">
-    <div class="bnav-icon">⬡</div>
-    <div class="bnav-label">Badges</div>
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">É<span>lume</span></a>
+  <ul class="nav-links">
+    <li><a href="#app">Try it</a></li>
+    <li><a href="#styles">Styles</a></li>
+    <li><a href="#how-it-works">How it works</a></li>
+  </ul>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="nav-badge" id="mpBadge" style="font-size:10px;padding:3px 8px">MP Loading…</div>
+    <div class="nav-badge" id="connectionBadge">Offline</div>
+    <button onclick="openConfig()" style="background:transparent;border:1px solid var(--border);color:var(--ivory-dim);padding:6px 14px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.15s" onmouseover="this.style.borderColor='var(--gold-dim)'" onmouseout="this.style.borderColor='var(--border)'">Configure</button>
   </div>
 </nav>
 
-<!-- Toast -->
-<div class="toast" id="toast"></div>
-<!-- Celebrate -->
-<div class="celebrate" id="celebrate"></div>
-
-<!-- Badge unlock overlay -->
-<div class="bdg-unlock" id="bdg-unlock">
-  <div class="bdg-unlock-card">
-    <div class="bdg-unlock-ico" id="bdg-unlock-ico"></div>
-    <div class="bdg-unlock-eyebrow">Badge Unlocked</div>
-    <div class="bdg-unlock-name" id="bdg-unlock-name"></div>
-    <div class="bdg-unlock-desc" id="bdg-unlock-desc"></div>
-    <button class="bdg-unlock-close" onclick="App.closeBadgeUnlock()">Claim</button>
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-copy">
+    <h1>
+      Your next<br>
+      <em>hairstyle,</em>
+      <span class="line-dim">before the scissors</span>
+    </h1>
+    <p>Élume uses a five-stage AI pipeline — BiSeNet face parsing, SAM2 mask refinement, LaMa inpainting, Groq vision analysis, and SDXL ControlNet rendering — to show you exactly what a new style looks like on you.</p>
+    <a href="#app" class="hero-cta">
+      Start your session
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+    </a>
   </div>
-</div>
+  <div class="hero-visual">
+    <div class="hero-visual-inner">
+      <div class="hero-visual-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      </div>
+      <span class="hero-visual-label">Upload a portrait to begin</span>
+    </div>
+    <div class="pipeline-stages">
+      <div class="stage" id="hStage0">MediaPipe</div>
+      <div class="stage" id="hStage1">BiSeNet</div>
+      <div class="stage" id="hStage2">SAM2</div>
+      <div class="stage" id="hStage3">LaMa</div>
+      <div class="stage" id="hStage4">Groq</div>
+      <div class="stage" id="hStage5">SDXL</div>
+    </div>
+  </div>
+</section>
 
-<!-- MediaPipe -->
-<script type="module">
-import { FaceLandmarker, FilesetResolver, DrawingUtils } from
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+<div class="section-divider"></div>
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-const PUSH_WORKER_URL = String.fromCharCode(104,116,116,112,115,58,47,47,101,108,117,109,101,45,110,111,116,105,102,105,99,97,116,105,111,110,115,46,101,108,109,111,114,105,99,104,97,114,100,112,101,114,101,105,114,97,100,105,103,105,116,97,108,46,119,111,114,107,101,114,115,46,100,101,118);
+<!-- APP -->
+<section id="app">
+  <div class="section-eyebrow">Virtual Try-On</div>
+  <div class="section-title">Upload. Analyze. <em>Transform.</em></div>
 
-// ─── PUSH NOTIFICATION HELPERS ───────────────────────────────────────────────
-function getOrCreateUserId() {
-  let id = localStorage.getItem('elume_user_id');
-  if (!id) { id = crypto.randomUUID(); localStorage.setItem('elume_user_id', id); }
-  return id;
-}
+  <div class="app-grid">
+    <!-- LEFT: CONTROLS -->
+    <div class="panel">
+      <div class="panel-title">Your Photo</div>
 
-function urlBase64ToUint8Array(b64) {
-  const pad = '='.repeat((4 - b64.length % 4) % 4);
-  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
-}
+      <!-- Upload zone -->
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" />
+        <div class="upload-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </div>
+        <div class="upload-text">Drop your portrait here</div>
+        <div class="upload-sub">JPEG · PNG · HEIC &nbsp;·&nbsp; Max 20MB</div>
+      </div>
 
-const API_BASE = String.fromCharCode(104,116,116,112,115,58,47,47,100,97,116,97,45,115,105,108,105,99,111,110,45,115,116,117,100,105,111,46,110,103,114,111,107,45,102,114,101,101,46,100,101,118);
-const STYLES   = ['natural waves','sleek straight','voluminous curls','textured bob',
-                  'layered shag','bixie cut','french girl','beach blowout'];
-const DAILY_TIPS = [
-  'Deep conditioning once a week significantly reduces breakage. Leave it on for 20 minutes.',
-  'Cold water rinse after washing seals the cuticle and adds shine.',
-  'Microfibre towels cause far less frizz than regular terry cloth.',
-  'Scalp massage for 4 minutes daily increases blood flow to follicles.',
-  'Never brush wet hair — use a wide-tooth comb starting from the ends.',
-  'Silk pillowcases reduce friction and help preserve your style overnight.',
-  'Heat protectant should be applied before every blow-dry, even on low heat.',
-];
+      <!-- Thumb preview -->
+      <div class="thumb-preview" id="thumbPreview">
+        <img id="thumbImg" src="" alt="Preview" />
+        <button class="thumb-clear" onclick="clearPhoto()" title="Remove photo">✕</button>
+      </div>
 
-// ─── STATE ────────────────────────────────────────────────────────────────────
-const State = {
-  screen: 'welcome',
-  capturedBlob: null,
-  capturedDataURL: null,
-  apiResult: null,
-  currentStyleIdx: 0,
-  styleImages: {},
-  facingMode: 'user',
-  torchOn: false,
-  camStream: null,
-  faceLandmarker: null,
-  landmarkLoop: null,
-  countdownTimer: null,
-  countdownActive: false,
-  checks: { face:false, center:false, dist:false, level:false, light:false, hair:false },
-  // routine / gamification (persisted)
-  routine: null,
-  xp: 0,
-  streak: 0,
-  lastActiveDate: null,
-  taskState: {},  // { taskId: { doneDate } }
-  earnedBadges: {},  // { badgeId: dateString }
+      <!-- MediaPipe mask preview -->
+      <div class="mp-mask-row" id="mpMaskRow">
+        <div class="mp-canvas-wrap">
+          <canvas id="mpCanvas"></canvas>
+        </div>
+        <div class="mp-mask-info">
+          <div class="mp-mask-title">MediaPipe Mask</div>
+          <div class="mp-mask-desc" id="mpMaskDesc">Running selfie segmentation…</div>
+          <label class="mp-toggle">
+            <input type="checkbox" id="mpEnabled" checked />
+            Send mask to backend (Layer 3)
+          </label>
+        </div>
+      </div>
+
+      <!-- Analyze button -->
+      <button class="btn-analyze" id="btnAnalyze" disabled onclick="analyzePhoto()">
+        Analyze face shape &amp; tone
+      </button>
+
+      <!-- Analysis result -->
+      <div class="analysis-card" id="analysisCard">
+        <div class="analysis-row">
+          <span class="analysis-label">Face shape</span>
+          <span class="analysis-value" id="af-shape">—</span>
+        </div>
+        <div class="analysis-row">
+          <span class="analysis-label">Skin tone</span>
+          <span class="analysis-value" id="af-tone">—</span>
+        </div>
+        <div class="analysis-row">
+          <span class="analysis-label">Current length</span>
+          <span class="analysis-value" id="af-length">—</span>
+        </div>
+        <div class="analysis-row">
+          <span class="analysis-label">Hair color</span>
+          <span class="analysis-value" id="af-color">—</span>
+        </div>
+      </div>
+
+      <div class="panel-title" style="margin-top:8px">Choose Style</div>
+
+      <!-- Style picker -->
+      <div class="style-grid" id="styleGrid">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- Custom request -->
+      <label class="field-label" for="customRequest">Or describe what you want</label>
+      <textarea class="field-input" id="customRequest" rows="2" placeholder="e.g. something romantic for a wedding…"></textarea>
+
+      <!-- Params -->
+      <div class="params-row">
+        <div class="param-group">
+          <label for="rStrength">Strength <span id="valStrength">0.99</span></label>
+          <input class="param-range" type="range" id="rStrength" min="0.5" max="1.0" step="0.01" value="0.99" oninput="document.getElementById('valStrength').textContent=this.value"/>
+        </div>
+        <div class="param-group">
+          <label for="rGuidance">Guidance <span id="valGuidance">7.5</span></label>
+          <input class="param-range" type="range" id="rGuidance" min="3" max="15" step="0.5" value="7.5" oninput="document.getElementById('valGuidance').textContent=this.value"/>
+        </div>
+        <div class="param-group">
+          <label for="rSteps">Steps <span id="valSteps">30</span></label>
+          <input class="param-range" type="range" id="rSteps" min="20" max="50" step="1" value="30" oninput="document.getElementById('valSteps').textContent=this.value"/>
+        </div>
+        <div class="param-group">
+          <label for="rDilate">Dilation <span id="valDilate">80</span>px</label>
+          <input class="param-range" type="range" id="rDilate" min="20" max="120" step="5" value="80" oninput="document.getElementById('valDilate').textContent=this.value"/>
+        </div>
+      </div>
+
+      <button class="btn-generate" id="btnGenerate" disabled onclick="generateStyle()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>
+        Generate hairstyle
+      </button>
+
+      <label class="mp-toggle" style="margin-bottom:8px">
+        <input type="checkbox" id="useAgents" checked />
+        Enable Planner + Reviewer agents
+      </label>
+
+      <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Upload a portrait to begin</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULTS -->
+    <div class="panel result-panel">
+      <div class="result-toolbar">
+        <button class="view-tab active" data-view="sbs" onclick="switchView('sbs',this)">Side by side</button>
+        <button class="view-tab" data-view="slider" onclick="switchView('slider',this)">Slider compare</button>
+        <div class="result-spacer"></div>
+        <button class="btn-download" id="btnDownload" onclick="downloadResult()">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Save result
+        </button>
+      </div>
+
+      <!-- Compare area -->
+      <div class="compare-area" id="compareArea">
+        <!-- Loading overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Processing your portrait</div>
+          <div class="loading-step" id="loadingStep">Initializing pipeline…</div>
+        </div>
+
+        <!-- Placeholder -->
+        <div class="compare-placeholder" id="comparePlaceholder">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <p>Your transformed portrait will appear here after generation</p>
+        </div>
+
+        <!-- Side-by-side -->
+        <div class="sbs-view active" id="sbsView">
+          <div class="sbs-pane">
+            <img id="sbsBefore" src="" alt="Before" style="display:none" />
+            <span class="sbs-label" style="display:none" id="sbsBeforeLabel">Before</span>
+          </div>
+          <div class="sbs-pane">
+            <img id="sbsAfter" src="" alt="After" style="display:none" />
+            <span class="sbs-label" style="display:none" id="sbsAfterLabel">After · <span id="sbsStyleLabel"></span></span>
+          </div>
+        </div>
+
+        <!-- Slider -->
+        <div class="slider-view" id="sliderView">
+          <img class="slider-img" id="sliderBefore" src="" alt="Before" />
+          <div class="slider-clip" id="sliderClip" style="width:50%">
+            <img id="sliderAfter" src="" alt="After" />
+          </div>
+          <div class="slider-handle" id="sliderHandle" style="left:50%"></div>
+        </div>
+      </div>
+
+      <!-- Reasoning card -->
+      <div class="reasoning-card" id="reasoningCard">
+        <div class="reasoning-card-title">Stylist's reasoning</div>
+        <p id="reasoningText"></p>
+        <div class="reasoning-tags" id="reasoningTags"></div>
+      </div>
+
+      <!-- Planner card -->
+      <div class="agent-card" id="plannerCard">
+        <div class="agent-card-header">
+          <span class="agent-icon planner-icon">P</span>
+          <span class="agent-card-title">Planner</span>
+          <span class="agent-confidence" id="plannerConfidence"></span>
+        </div>
+        <p class="agent-card-reasoning" id="plannerReasoning"></p>
+        <div class="agent-params" id="plannerParams"></div>
+      </div>
+
+      <!-- Reviewer card -->
+      <div class="agent-card" id="reviewerCard">
+        <div class="agent-card-header">
+          <span class="agent-icon reviewer-icon">R</span>
+          <span class="agent-card-title">Reviewer</span>
+          <span class="agent-score" id="reviewerScore"></span>
+        </div>
+        <div class="reviewer-checks" id="reviewerChecks"></div>
+        <p class="agent-card-reasoning" id="reviewerSuggestion"></p>
+        <div class="reviewer-issues" id="reviewerIssues"></div>
+      </div>
+
+      <!-- Pipeline log -->
+      <div class="pipeline-log" id="pipelineLog"></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+  <div class="section-eyebrow">The pipeline</div>
+  <div class="section-title">Six layers of AI,<br><em>one seamless result.</em></div>
+
+  <div class="how-grid" style="grid-template-columns: repeat(3,1fr)">
+    <div class="how-step" style="border-left:none">
+      <span class="how-number">0</span>
+      <div class="how-step-title">MediaPipe (Client)</div>
+      <p class="how-step-desc">Selfie Segmenter runs entirely in your browser via WebAssembly — no upload needed. It produces a person/background mask that becomes Layer 3 in the dual-mask system, especially helping long hair that drapes over shoulders.</p>
+    </div>
+    <div class="how-step">
+      <span class="how-number">1</span>
+      <div class="how-step-title">BiSeNet Face Parsing</div>
+      <p class="how-step-desc">Segments your portrait into 19 semantic regions. Hair is isolated at class 17; eyes, lips, and skin are flagged as protected zones that will never be altered.</p>
+    </div>
+    <div class="how-step">
+      <span class="how-number">2</span>
+      <div class="how-step-title">SAM2 Mask Refinement</div>
+      <p class="how-step-desc">Segment Anything Model 2 sharpens the hair boundary using point prompts seeded from the BiSeNet centroid, recovering fine strands and edges BiSeNet misses.</p>
+    </div>
+    <div class="how-step" style="border-left:none">
+      <span class="how-number">3</span>
+      <div class="how-step-title">LaMa Inpainting</div>
+      <p class="how-step-desc">The hair region — plus a dilation zone covering ears, neck, and shoulders hidden beneath long hair — is cleanly erased using Large Mask inpainting, giving SDXL a blank canvas.</p>
+    </div>
+    <div class="how-step">
+      <span class="how-number">4</span>
+      <div class="how-step-title">Groq Vision Analysis</div>
+      <p class="how-step-desc">Llama 4 Scout reads your face shape, skin tone, and current length via the Groq API and selects the three styles from Élume's knowledge base that suit you best.</p>
+    </div>
+    <div class="how-step">
+      <span class="how-number">5</span>
+      <div class="how-step-title">SDXL + Face Restore</div>
+      <p class="how-step-desc">Stable Diffusion XL renders the new style into the erased region. Your original face pixels are then composited back with a feathered Gaussian blend — identity fully intact.</p>
+    </div>
+  </div>
+</section>
+
+<!-- STYLES SHOWCASE -->
+<section id="styles">
+  <div class="section-eyebrow">Style Library</div>
+  <div class="section-title">14 styles. <em>Endless combinations.</em></div>
+  <div class="styles-scroll" id="styleShowcase">
+    <!-- populated by JS -->
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">É<span>lume</span> <span style="color:var(--ivory-dim);font-family:Inter;font-size:12px;letter-spacing:0.08em;font-weight:300;margin-left:8px">v5</span></div>
+  <div class="footer-pipeline">MediaPipe · BiSeNet · SAM2 · LaMa · Groq · SDXL</div>
+  <div class="footer-note">AI-assisted virtual hair try-on</div>
+</footer>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────────
+
+const state = {
+  apiUrl: localStorage.getItem('elume_api_url') || '',
+  selectedFile: null,
+  selectedStyle: null,
+  analysisData: null,
+  resultImageB64: null,
+  originalDataUrl: null,
+  mpMaskB64: null,
+  view: 'sbs',
+  sliderPos: 50,
+  isDraggingSlider: false,
 };
 
-// ─── BADGE DEFINITIONS ────────────────────────────────────────────────────────
-const BADGES = [
-  { id:'first_scan',  icon:'📸', name:'First Look',     desc:'Completed your first AI hair scan.',          xp:50  },
-  { id:'first_task',  icon:'✅', name:'First Step',     desc:'Completed your first routine task.',          xp:25  },
-  { id:'streak_3',    icon:'🔥', name:'Three Day Fire', desc:'Maintained a 3-day care streak.',             xp:75  },
-  { id:'streak_7',    icon:'💎', name:'Devoted',        desc:'7-day streak — serious commitment.',          xp:150 },
-  { id:'streak_30',   icon:'👑', name:'Crown',          desc:'30-day streak. You are the routine.',         xp:500 },
-  { id:'styles_3',    icon:'💇', name:'Style Explorer', desc:'Tried 3 different hairstyle previews.',       xp:50  },
-  { id:'saved',       icon:'🖼', name:'Keeper',         desc:'Saved your first result to the gallery.',     xp:30  },
-  { id:'salon',       icon:'✂️', name:'In the Chair',   desc:'Booked a salon appointment.',                 xp:40  },
-  { id:'perfect_day', icon:'⭐', name:'Perfect Day',    desc:'Completed every task in a single day.',       xp:100 },
-  { id:'xp_500',      icon:'🌟', name:'Rising Star',    desc:'Earned 500 total XP.',                        xp:100 },
-  { id:'xp_1000',     icon:'🏆', name:'Gold Standard',  desc:'Earned 1,000 total XP.',                      xp:200 },
-  { id:'scan_5',      icon:'🔍', name:'Researcher',     desc:'Ran 5 AI hair analyses.',                     xp:100 },
-];
+const STYLES = {
+  pixie_cut:       { name: 'Pixie Cut',      desc: 'Very short pixie with textured layers' },
+  bob_classic:     { name: 'Classic Bob',     desc: 'Chin-length sleek bob' },
+  lob_wavy:        { name: 'Wavy Lob',        desc: 'Shoulder-length wavy lob' },
+  beach_waves_long:{ name: 'Beach Waves',     desc: 'Long flowing beach waves' },
+  straight_sleek:  { name: 'Glass Hair',      desc: 'Long straight mirror shine' },
+  curtain_bangs:   { name: 'Curtain Bangs',   desc: 'Face-framing curtain bangs' },
+  shag_layers:     { name: 'Shag Layers',     desc: 'Layered shag with textured fringe' },
+  bun_high:        { name: 'High Bun',        desc: 'Elegant high sleek bun' },
+  braids_box:      { name: 'Box Braids',      desc: 'Medium box braids' },
+  afro_natural:    { name: 'Natural Afro',    desc: 'Voluminous natural afro' },
+  blunt_fringe:    { name: 'Blunt Fringe',    desc: 'Sharp blunt cut with heavy fringe' },
+  side_swept:      { name: 'Side Swept',      desc: 'Glamorous deep side part' },
+  wolf_cut:        { name: 'Wolf Cut',        desc: 'Trendy wolf cut' },
+  textured_crop:   { name: 'Textured Crop',   desc: 'Short textured crop with fade' },
+};
 
-// ─── ROUTINE TASKS ────────────────────────────────────────────────────────────
-const BASE_TASKS = [
-  { id:'wash',    icon:'🚿', name:'Wash Hair',            freq:'every3',  pts:30, time:'Evening', notif:19 },
-  { id:'cond',    icon:'💆', name:'Condition',            freq:'every3',  pts:20, time:'Evening', notif:19 },
-  { id:'scalp',   icon:'🤲', name:'Scalp Massage',        freq:'daily',   pts:15, time:'Morning', notif: 8 },
-  { id:'deepcond',icon:'✨', name:'Deep Condition Mask',  freq:'weekly',  pts:40, time:'Weekend', notif:10 },
-  { id:'trim',    icon:'✂️', name:'Schedule Trim',        freq:'monthly', pts:50, time:'Anytime', notif:12 },
-  { id:'oil',     icon:'💧', name:'Hair Oil Treatment',   freq:'weekly',  pts:35, time:'Evening', notif:20 },
-  { id:'protect', icon:'🛡', name:'Apply Heat Protectant',freq:'daily',   pts:10, time:'Morning', notif: 7 },
-  { id:'brush',   icon:'🪮', name:'Detangle Gently',      freq:'daily',   pts:10, time:'Morning', notif: 7 },
-];
+// ── INIT ──────────────────────────────────────────────────────────────────────
 
-const LEVEL_THRESHOLDS = [
-  { name:'Beginner',   min:0    },
-  { name:'Apprentice', min:200  },
-  { name:'Dedicated',  min:500  },
-  { name:'Expert',     min:1000 },
-  { name:'Master',     min:2000 },
-];
+document.addEventListener('DOMContentLoaded', () => {
+  renderStyleGrid();
+  renderStyleShowcase();
+  updateConnectionBadge();
 
-// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
-function save() {
-  const d = {
-    xp: State.xp,
-    streak: State.streak,
-    lastActiveDate: State.lastActiveDate,
-    taskState: State.taskState,
-    earnedBadges: State.earnedBadges,
-    scanCount: State.scanCount || 0,
-    savedCount: State.savedCount || 0,
-    stylesTriedCount: State.stylesTriedCount || 0,
-    salonCount: State.salonCount || 0,
-  };
-  localStorage.setItem('elume_v1', JSON.stringify(d));
-}
-
-function load() {
-  try {
-    const d = JSON.parse(localStorage.getItem('elume_v1') || '{}');
-    State.xp           = d.xp           || 0;
-    State.streak       = d.streak       || 0;
-    State.lastActiveDate = d.lastActiveDate || null;
-    State.taskState    = d.taskState    || {};
-    State.earnedBadges = d.earnedBadges || {};
-    State.scanCount    = d.scanCount    || 0;
-    State.savedCount   = d.savedCount   || 0;
-    State.stylesTriedCount = d.stylesTriedCount || 0;
-    State.salonCount   = d.salonCount   || 0;
-  } catch(e) {}
-}
-
-// ─── UTILITIES ────────────────────────────────────────────────────────────────
-function today() { return new Date().toISOString().slice(0,10); }
-function fmt(d)   { return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
-
-function isTaskDueToday(task) {
-  const t = today();
-  const done = State.taskState[task.id]?.doneDate;
-  if (task.freq === 'daily')   return done !== t;
-  if (task.freq === 'every3') {
-    if (!done) return true;
-    const diff = (new Date(t) - new Date(done)) / 86400000;
-    return diff >= 3;
-  }
-  if (task.freq === 'weekly') {
-    if (!done) return true;
-    const diff = (new Date(t) - new Date(done)) / 86400000;
-    return diff >= 7;
-  }
-  if (task.freq === 'monthly') {
-    if (!done) return true;
-    const diff = (new Date(t) - new Date(done)) / 86400000;
-    return diff >= 28;
-  }
-  return false;
-}
-
-function isTaskDone(task) {
-  return State.taskState[task.id]?.doneDate === today();
-}
-
-function isDayOverdue(task) {
-  const done = State.taskState[task.id]?.doneDate;
-  if (!done) return false;
-  const diff = (new Date(today()) - new Date(done)) / 86400000;
-  if (task.freq === 'daily')   return diff > 1;
-  if (task.freq === 'every3') return diff > 4;
-  if (task.freq === 'weekly')  return diff > 9;
-  return false;
-}
-
-function getLevel() {
-  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (State.xp >= LEVEL_THRESHOLDS[i].min) {
-      return { ...LEVEL_THRESHOLDS[i], idx:i };
-    }
-  }
-  return { ...LEVEL_THRESHOLDS[0], idx:0 };
-}
-
-function getLevelProgress() {
-  const lv = getLevel();
-  const next = LEVEL_THRESHOLDS[lv.idx + 1];
-  if (!next) return 100;
-  return ((State.xp - lv.min) / (next.min - lv.min)) * 100;
-}
-
-function getLevelNext() {
-  const lv = getLevel();
-  return LEVEL_THRESHOLDS[lv.idx + 1];
-}
-
-// ─── XP + STREAKS ─────────────────────────────────────────────────────────────
-function awardXP(amount, label) {
-  State.xp += amount;
-  save();
-  App.toast(`+${amount} XP · ${label}`);
-  checkXPBadges();
-  renderRoutine();
-  renderBadges();
-}
-
-function updateStreak() {
-  const t = today();
-  if (State.lastActiveDate === t) return;
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = yesterday.toISOString().slice(0,10);
-  if (State.lastActiveDate === yStr) {
-    State.streak++;
-  } else if (State.lastActiveDate !== t) {
-    // more than 1 day gap — forgiveness: don't crash to 0, decay by 1
-    State.streak = Math.max(0, State.streak - 1);
-  }
-  State.lastActiveDate = t;
-  save();
-  checkStreakBadges();
-}
-
-// ─── BADGE ENGINE ─────────────────────────────────────────────────────────────
-function checkBadge(id) {
-  if (State.earnedBadges[id]) return;
-  const b = BADGES.find(x => x.id === id);
-  if (!b) return;
-  State.earnedBadges[id] = today();
-  save();
-  State.xp += b.xp; // badge bonus XP (silent)
-  save();
-  showBadgeUnlock(b);
-  renderBadges();
-}
-
-function checkStreakBadges() {
-  if (State.streak >= 3)  checkBadge('streak_3');
-  if (State.streak >= 7)  checkBadge('streak_7');
-  if (State.streak >= 30) checkBadge('streak_30');
-}
-
-function checkXPBadges() {
-  if (State.xp >= 500)  checkBadge('xp_500');
-  if (State.xp >= 1000) checkBadge('xp_1000');
-}
-
-function checkPerfectDay() {
-  const due = BASE_TASKS.filter(t => isTaskDueToday(t));
-  const allDone = due.length > 0 && due.every(t => isTaskDone(t));
-  if (allDone) checkBadge('perfect_day');
-}
-
-// ─── SCREENS ──────────────────────────────────────────────────────────────────
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('s-' + id).classList.add('active');
-  State.screen = id;
-}
-
-// ─── MEDIAPIPE INIT ───────────────────────────────────────────────────────────
-async function initMediaPipe() {
-  if (State.faceLandmarker) return;
-  const vision = await FilesetResolver.forVisionTasks(
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
-  );
-  State.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-      delegate:'GPU'
-    },
-    outputFaceBlendshapes: true,
-    outputFacialTransformationMatrixes: true,
-    runningMode: 'VIDEO',
-    numFaces: 1,
-  });
-}
-
-// ─── CAMERA ───────────────────────────────────────────────────────────────────
-async function startCameraInternal() {
-  if (State.camStream) stopCamera();
-  try {
-    State.camStream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode: State.facingMode, width:{ideal:1920}, height:{ideal:1080} },
-      audio:false
-    });
-    const video = document.getElementById('video');
-    video.srcObject = State.camStream;
-    await video.play();
-    await initMediaPipe();
-    startLandmarkLoop();
-  } catch(e) {
-    App.toast('Camera access denied');
-  }
-}
-
-function stopCamera() {
-  if (State.camStream) { State.camStream.getTracks().forEach(t=>t.stop()); State.camStream=null; }
-  if (State.landmarkLoop) { cancelAnimationFrame(State.landmarkLoop); State.landmarkLoop=null; }
-}
-
-function startLandmarkLoop() {
-  const video  = document.getElementById('video');
-  const canvas = document.getElementById('overlay-canvas');
-  const ctx    = canvas.getContext('2d');
-  let lastMs   = -1;
-
-  function loop(ts) {
-    if (!State.camStream) return;
-    State.landmarkLoop = requestAnimationFrame(loop);
-
-    canvas.width  = video.videoWidth  || canvas.offsetWidth;
-    canvas.height = video.videoHeight || canvas.offsetHeight;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (!State.faceLandmarker || !video.videoWidth) return;
-
-    const ms = performance.now();
-    if (ms === lastMs) return;
-    lastMs = ms;
-
-    const results = State.faceLandmarker.detectForVideo(video, ms);
-
-    if (!results.faceLandmarks.length) {
-      setChecks({ face:false, center:false, dist:false, level:false, light:false, hair:false });
-      updateGuide();
-      return;
-    }
-
-    const lm = results.faceLandmarks[0];
-
-    // mirror x for front camera
-    const mx = k => (State.facingMode === 'user') ? 1 - lm[k].x : lm[k].x;
-
-    // ── draw golden mesh ──
-    ctx.save();
-    if (State.facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-    const du = new DrawingUtils(ctx);
-    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_TESSELATION,
-      { color:'rgba(201,168,76,0.18)', lineWidth:0.6 });
-    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
-      { color:'rgba(201,168,76,0.55)', lineWidth:1.2 });
-    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-      { color:'rgba(201,168,76,0.75)', lineWidth:1.5 });
-    du.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-      { color:'rgba(201,168,76,0.75)', lineWidth:1.5 });
-    ctx.restore();
-
-    // ── checks ──
-    const noseTip = { x: mx(1), y: lm[1].y };
-    const chin    = { x: mx(152), y: lm[152].y };
-    const leftE   = { x: mx(33),  y: lm[33].y };
-    const rightE  = { x: mx(263), y: lm[263].y };
-    const foreL   = { x: mx(54),  y: lm[54].y };
-    const foreR   = { x: mx(284), y: lm[284].y };
-
-    const faceH   = (chin.y - lm[10].y);
-    const faceW   = Math.abs(foreR.x - foreL.x);
-    const centerX = noseTip.x;
-    const centerY = (lm[10].y + chin.y) / 2;
-    const eyeDiff = Math.abs(leftE.y - rightE.y);
-
-    const c = {
-      face:   true,
-      center: centerX > 0.35 && centerX < 0.65 && centerY > 0.3 && centerY < 0.72,
-      dist:   faceH > 0.28 && faceH < 0.70 && faceW > 0.22,
-      level:  eyeDiff < 0.04,
-      light:  checkLighting(video, canvas),
-      hair:   checkHair(video, canvas, lm, mx),
-    };
-
-    setChecks(c);
-    updateGuide();
-
-    const allOk = Object.values(c).every(Boolean);
-    document.getElementById('face-oval').classList.toggle('ready', allOk);
-    document.getElementById('btn-shutter').classList.toggle('ready', allOk);
-
-    if (allOk && !State.countdownActive) {
-      startCountdown();
-    } else if (!allOk && State.countdownActive) {
-      cancelCountdown();
-    }
+  if (!state.apiUrl) {
+    setTimeout(() => document.getElementById('configModal').classList.add('open'), 800);
   }
 
-  requestAnimationFrame(loop);
-}
+  // File input
+  const fileInput = document.getElementById('fileInput');
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
 
-function checkLighting(video, canvas) {
-  const tmpC = document.createElement('canvas');
-  tmpC.width = 32; tmpC.height = 32;
-  const t = tmpC.getContext('2d');
-  t.drawImage(video, 0, 0, 32, 32);
-  const d = t.getImageData(0, 0, 32, 32).data;
-  let total = 0;
-  for (let i = 0; i < d.length; i += 4) total += (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114);
-  return (total / (32*32)) > 55;
-}
-
-function checkHair(video, canvas, lm, mx) {
-  const tmpC = document.createElement('canvas');
-  tmpC.width = 16; tmpC.height = 16;
-  const t = tmpC.getContext('2d');
-  // sample cheek area
-  const cx = Math.round(mx(234) * video.videoWidth);
-  const cy = Math.round(lm[234].y * video.videoHeight);
-  t.drawImage(video, cx - 8, cy - 8, 16, 16, 0, 0, 16, 16);
-  const dk = t.getImageData(0, 0, 16, 16).data;
-  let cr = 0, cg = 0, cb = 0;
-  for (let i = 0; i < dk.length; i += 4) { cr += dk[i]; cg += dk[i+1]; cb += dk[i+2]; }
-  const n = (16*16);
-  cr /= n; cg /= n; cb /= n;
-  // sample forehead
-  const fx = Math.round(mx(10) * video.videoWidth);
-  const fy = Math.round(lm[10].y * video.videoHeight - 18);
-  t.drawImage(video, fx - 8, fy - 8, 16, 16, 0, 0, 16, 16);
-  const fd = t.getImageData(0, 0, 16, 16).data;
-  let fr = 0, fg = 0, fb = 0;
-  for (let i = 0; i < fd.length; i += 4) { fr += fd[i]; fg += fd[i+1]; fb += fd[i+2]; }
-  fr /= n; fg /= n; fb /= n;
-  const diff = Math.abs(fr - cr) + Math.abs(fg - cg) + Math.abs(fb - cb);
-  return diff < 90; // large diff = hair covering forehead
-}
-
-function setChecks(c) {
-  State.checks = c;
-  const ids = { face:'chk-face', center:'chk-center', dist:'chk-dist',
-                level:'chk-level', light:'chk-light', hair:'chk-hair' };
-  for (const [k, elId] of Object.entries(ids)) {
-    const el = document.getElementById(elId);
-    el.classList.toggle('ok',   c[k]);
-    el.classList.toggle('fail', !c[k]);
-  }
-}
-
-function updateGuide() {
-  const c = State.checks;
-  const pill = document.getElementById('guide-pill');
-  const au = document.getElementById('arr-up'),
-        ad = document.getElementById('arr-down'),
-        al = document.getElementById('arr-left'),
-        ar = document.getElementById('arr-right');
-
-  [au,ad,al,ar].forEach(a => a.classList.remove('show'));
-  pill.className = 'guide-pill';
-
-  if (!c.face)   { pill.textContent = 'Position your face in the oval'; return; }
-  if (!c.light)  { pill.textContent = 'Move to better lighting'; pill.classList.add('warn'); return; }
-  if (!c.hair)   { pill.textContent = 'Tie hair back or sweep it behind your shoulders'; pill.classList.add('warn'); return; }
-  if (!c.center) {
-    pill.textContent = 'Centre your face';
-    al.classList.add('show'); ar.classList.add('show');
-    return;
-  }
-  if (!c.dist) {
-    pill.textContent = 'Move closer to the camera';
-    au.classList.add('show');
-    return;
-  }
-  if (!c.level)  { pill.textContent = 'Keep your head level'; pill.classList.add('warn'); return; }
-  pill.textContent = 'Hold still…'; pill.classList.add('ready');
-}
-
-// ─── COUNTDOWN ────────────────────────────────────────────────────────────────
-function startCountdown() {
-  State.countdownActive = true;
-  const cd = document.getElementById('countdown');
-  const num = document.getElementById('cnt-num');
-  const cheese = document.getElementById('cnt-cheese');
-  cheese.textContent = '';
-  let n = 3;
-
-  function tick() {
-    if (!State.countdownActive) return;
-    if (!Object.values(State.checks).every(Boolean)) { cancelCountdown(); return; }
-    cd.classList.add('show');
-    if (n > 0) {
-      num.textContent = n;
-      num.style.animation = 'none';
-      requestAnimationFrame(() => { num.style.animation = ''; });
-      n--;
-      State.countdownTimer = setTimeout(tick, 900);
-    } else {
-      num.textContent = '';
-      cheese.textContent = 'CHEESE';
-      State.countdownTimer = setTimeout(() => {
-        cd.classList.remove('show');
-        State.countdownActive = false;
-        capture();
-      }, 700);
-    }
-  }
-  tick();
-}
-
-function cancelCountdown() {
-  State.countdownActive = false;
-  if (State.countdownTimer) { clearTimeout(State.countdownTimer); State.countdownTimer = null; }
-  document.getElementById('countdown').classList.remove('show');
-}
-
-// ─── CAPTURE ──────────────────────────────────────────────────────────────────
-function capture() {
-  const video = document.getElementById('video');
-  const canvas = document.createElement('canvas');
-  canvas.width  = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d');
-  if (State.facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-  ctx.drawImage(video, 0, 0);
-  canvas.toBlob(blob => {
-    State.capturedBlob    = blob;
-    State.capturedDataURL = canvas.toDataURL('image/jpeg', 0.92);
-    stopCamera();
-    App.submitToAPI();
-  }, 'image/jpeg', 0.92);
-}
-
-// ─── COMPARE SLIDER ───────────────────────────────────────────────────────────
-function initSlider() {
-  const container = document.getElementById('cmp-container');
-  const slider    = document.getElementById('cmp-slider');
-  const after     = document.getElementById('cmp-after');
-
-  function move(x) {
-    const rect = container.getBoundingClientRect();
-    let pct = (x - rect.left) / rect.width;
-    pct = Math.max(0.05, Math.min(0.95, pct));
-    slider.style.left = (pct * 100) + '%';
-    after.style.clipPath = `inset(0 ${(1-pct)*100}% 0 0)`;
-  }
-
-  container.addEventListener('touchmove', e => {
+  // Drag and drop
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
     e.preventDefault();
-    move(e.touches[0].clientX);
-  }, { passive:false });
-  container.addEventListener('mousemove', e => {
-    if (e.buttons) move(e.clientX);
+    zone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) handleFile(f);
   });
-  container.addEventListener('touchstart', e => move(e.touches[0].clientX), {passive:true});
-  container.addEventListener('mousedown',  e => move(e.clientX));
+
+  // Slider drag
+  const handle = document.getElementById('sliderHandle');
+  const sliderView = document.getElementById('sliderView');
+
+  handle.addEventListener('mousedown', startSliderDrag);
+  handle.addEventListener('touchstart', startSliderDrag, { passive: true });
+  sliderView.addEventListener('click', moveSliderTo);
+  document.addEventListener('mousemove', onSliderDrag);
+  document.addEventListener('touchmove', onSliderDrag, { passive: false });
+  document.addEventListener('mouseup', () => state.isDraggingSlider = false);
+  document.addEventListener('touchend', () => state.isDraggingSlider = false);
+});
+
+// ── STYLE RENDER ──────────────────────────────────────────────────────────────
+
+function renderStyleGrid() {
+  const grid = document.getElementById('styleGrid');
+  grid.innerHTML = Object.entries(STYLES).map(([key, s]) => `
+    <button class="style-chip" data-key="${key}" onclick="selectStyle('${key}', this)">
+      ${s.name}
+    </button>
+  `).join('');
 }
 
-// ─── ROUTINE RENDER ───────────────────────────────────────────────────────────
-function renderRoutine() {
-  const t = today();
-  document.getElementById('tasks-date').textContent =
-    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+function renderStyleShowcase() {
+  const el = document.getElementById('styleShowcase');
+  const icons = ['💇', '✂️', '🌊', '☀️', '✨', '🎀', '🪷', '👑', '🎵', '🌿', '⚡', '🎬', '🐺', '🔥'];
+  el.innerHTML = Object.entries(STYLES).map(([key, s], i) => `
+    <div class="style-card" onclick="jumpToStyle('${key}')">
+      <div class="style-card-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+      </div>
+      <div class="style-card-name">${s.name}</div>
+      <div class="style-card-desc">${s.desc}</div>
+    </div>
+  `).join('');
+}
 
-  // tip of the day
-  const tipIdx = (new Date().getDate()) % DAILY_TIPS.length;
-  document.getElementById('tip-text').textContent = DAILY_TIPS[tipIdx];
+function jumpToStyle(key) {
+  document.getElementById('app').scrollIntoView({ behavior: 'smooth' });
+  setTimeout(() => selectStyle(key, document.querySelector(`[data-key="${key}"]`)), 400);
+}
 
-  // score (XP-based, 0-100 window)
-  const score = Math.min(100, Math.round(State.xp / 20));
-  const el    = document.getElementById('gauge-fill');
-  const numEl = document.getElementById('gauge-num');
-  numEl.textContent = score;
-  // stroke-dasharray = 251, offset = 251 - (score/100)*251
-  el.style.strokeDashoffset = 251 - (score / 100) * 251;
-  el.className = 'gauge-fill' + (score < 40 ? ' low' : score < 70 ? ' amber' : '');
+function selectStyle(key, el) {
+  state.selectedStyle = key;
+  document.querySelectorAll('.style-chip').forEach(c => c.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+  document.getElementById('customRequest').value = '';
+  updateGenerateBtn();
+}
 
-  document.getElementById('streak-num').textContent = State.streak;
-  document.getElementById('xp-num').textContent    = State.xp;
+// ── FILE HANDLING ─────────────────────────────────────────────────────────────
 
-  // today's tasks
-  const due     = BASE_TASKS.filter(t => isTaskDueToday(t));
-  const notDue  = BASE_TASKS.filter(t => !isTaskDueToday(t));
-  const done    = BASE_TASKS.filter(t => isTaskDone(t));
-  document.getElementById('done-today-num').textContent = `${done.length}/${due.length + done.length}`;
+function handleFile(file) {
+  if (!file) return;
+  state.selectedFile = file;
+  state.mpMaskB64 = null;
 
-  // notif banner
-  const notifGranted = Notification?.permission === 'granted';
-  document.getElementById('notif-banner').classList.toggle('hide', notifGranted);
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.originalDataUrl = e.target.result;
+    const thumb = document.getElementById('thumbImg');
+    thumb.src = e.target.result;
 
-  // task list
-  const tl = document.getElementById('task-list');
-  tl.innerHTML = '';
-  const todayTasks = [...due, ...done.filter(d => !due.includes(d))];
-  if (todayTasks.length === 0) {
-    tl.innerHTML = '<div style="padding:12px 0;font-size:13px;color:var(--dim);text-align:center">All caught up! ✦</div>';
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('thumbPreview').classList.add('visible');
+    document.getElementById('btnAnalyze').disabled = !state.apiUrl;
+    document.getElementById('btnGenerate').disabled = false;
+    setStatus('ready', 'Photo loaded — running MediaPipe segmentation…');
+
+    // Show in hero visual too
+    const heroInner = document.querySelector('.hero-visual-inner');
+    if (heroInner) heroInner.style.backgroundImage = `url(${e.target.result})`;
+
+    // Run MediaPipe on the loaded image
+    const img = new Image();
+    img.onload = () => runMediaPipe(img);
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  state.selectedFile = null;
+  state.originalDataUrl = null;
+  state.resultImageB64 = null;
+  state.mpMaskB64 = null;
+  document.getElementById('uploadZone').style.display = 'block';
+  document.getElementById('thumbPreview').classList.remove('visible');
+  document.getElementById('mpMaskRow').classList.remove('visible');
+  document.getElementById('analysisCard').classList.remove('visible');
+  document.getElementById('btnAnalyze').disabled = true;
+  document.getElementById('btnGenerate').disabled = true;
+  document.getElementById('comparePlaceholder').style.display = '';
+  document.getElementById('sbsBefore').style.display = 'none';
+  document.getElementById('sbsAfter').style.display = 'none';
+  document.getElementById('sbsBeforeLabel').style.display = 'none';
+  document.getElementById('sbsAfterLabel').style.display = 'none';
+  document.getElementById('reasoningCard').classList.remove('visible');
+  document.getElementById('plannerCard').classList.remove('visible');
+  document.getElementById('reviewerCard').classList.remove('visible');
+  document.getElementById('pipelineLog').classList.remove('visible');
+  document.getElementById('btnDownload').classList.remove('visible');
+  setStatus('idle', 'Upload a portrait to begin');
+  document.getElementById('fileInput').value = '';
+}
+
+function updateGenerateBtn() {
+  const hasFile = !!state.selectedFile;
+  document.getElementById('btnGenerate').disabled = !hasFile;
+}
+
+// ── MEDIAPIPE SELFIE SEGMENTATION ─────────────────────────────────────────────
+
+async function runMediaPipe(imgEl) {
+  const row  = document.getElementById('mpMaskRow');
+  const desc = document.getElementById('mpMaskDesc');
+  row.classList.add('visible');
+  desc.textContent = 'Running selfie segmentation…';
+
+  // Wait up to 8 seconds for MP to load
+  let waited = 0;
+  while (!window._mpLoaded && waited < 8000) {
+    await new Promise(r => setTimeout(r, 200));
+    waited += 200;
   }
-  todayTasks.forEach(task => {
-    const isDoneToday = isTaskDone(task);
-    const overdue     = isDayOverdue(task) && !isDoneToday;
-    const card = document.createElement('div');
-    card.className = 'task-card' + (isDoneToday ? ' done' : overdue ? ' overdue' : ' due');
-    card.innerHTML = `
-      <div class="task-ico ${isDoneToday ? 'done-ico' : ''}">${task.icon}</div>
-      <div class="task-body">
-        <div class="task-name">${task.name}</div>
-        <div class="task-meta ${overdue ? 'overdue' : 'due'}">${isDoneToday ? 'Done today' : overdue ? 'Overdue' : task.time} · +${task.pts} XP</div>
-      </div>
-      <div class="task-check">${isDoneToday ? '✓' : ''}</div>
-    `;
-    if (!isDoneToday) {
-      card.addEventListener('click', () => completeTask(task, card));
+
+  if (!window._mpLoaded || !window._mpSegmenter) {
+    desc.textContent = 'MediaPipe unavailable — mask will be skipped';
+    return;
+  }
+
+  try {
+    // Run segmentation
+    const result = window._mpSegmenter.segment(imgEl);
+    const catMask = result.categoryMask;
+
+    // Draw mask to canvas
+    const canvas = document.getElementById('mpCanvas');
+    const W = catMask.width;
+    const H = catMask.height;
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // categoryMask: 0 = background, 1 = person
+    const maskData = catMask.getAsUint8Array();
+    const imageData = ctx.createImageData(W, H);
+    for (let i = 0; i < maskData.length; i++) {
+      const isPersonPixel = maskData[i] === 1;
+      const base = i * 4;
+      // Render: person = semi-transparent gold, background = dark
+      imageData.data[base]     = isPersonPixel ? 212 : 20;
+      imageData.data[base + 1] = isPersonPixel ? 168 : 20;
+      imageData.data[base + 2] = isPersonPixel ? 83  : 24;
+      imageData.data[base + 3] = isPersonPixel ? 200 : 120;
     }
-    tl.appendChild(card);
-  });
+    ctx.putImageData(imageData, 0, 0);
 
-  // upcoming
-  const ul = document.getElementById('upcoming-list');
-  ul.innerHTML = '';
-  notDue.slice(0,3).forEach(task => {
-    const done = State.taskState[task.id]?.doneDate;
-    const card = document.createElement('div');
-    card.className = 'task-card';
-    card.style.opacity = '.5';
-    card.innerHTML = `
-      <div class="task-ico">${task.icon}</div>
-      <div class="task-body">
-        <div class="task-name">${task.name}</div>
-        <div class="task-meta">${done ? 'Last done ' + fmt(done) : 'Not started'}</div>
-      </div>
-    `;
-    ul.appendChild(card);
-  });
+    // Also export a pure binary PNG for the backend
+    // Build a grayscale mask: person = 255, background = 0
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width  = W;
+    maskCanvas.height = H;
+    const mCtx = maskCanvas.getContext('2d');
+    const mData = mCtx.createImageData(W, H);
+    for (let i = 0; i < maskData.length; i++) {
+      const val  = maskData[i] === 1 ? 255 : 0;
+      const base = i * 4;
+      mData.data[base]     = val;
+      mData.data[base + 1] = val;
+      mData.data[base + 2] = val;
+      mData.data[base + 3] = 255;
+    }
+    mCtx.putImageData(mData, 0, 0);
+
+    // Convert to base64 PNG data-URI
+    state.mpMaskB64 = maskCanvas.toDataURL('image/png');
+
+    const personPct = Math.round((maskData.filter(v => v === 1).length / maskData.length) * 100);
+    desc.textContent = `Person coverage: ${personPct}% — mask ready for Layer 3`;
+
+    catMask.close();
+    setStatus('ready', 'MediaPipe mask ready — analyze or generate');
+  } catch (err) {
+    console.warn('MediaPipe segmentation failed:', err);
+    desc.textContent = `Segmentation error: ${err.message}`;
+    state.mpMaskB64 = null;
+  }
 }
 
-function completeTask(task, card) {
-  State.taskState[task.id] = { doneDate: today() };
-  updateStreak();
-  awardXP(task.pts, task.name);
-  // pts animation
-  const pts = document.createElement('div');
-  pts.className = 'task-pts';
-  pts.textContent = '+' + task.pts;
-  card.appendChild(pts);
-  setTimeout(() => pts.remove(), 800);
-  checkBadge('first_task');
-  checkPerfectDay();
-  setTimeout(renderRoutine, 300);
+// ── ANALYZE ───────────────────────────────────────────────────────────────────
 
-  // celebrate flash
-  const cel = document.getElementById('celebrate');
-  cel.classList.remove('pop');
-  requestAnimationFrame(() => cel.classList.add('pop'));
+async function analyzePhoto() {
+  if (!state.selectedFile || !state.apiUrl) return;
+  setStatus('running', 'Analyzing face with Groq Vision…');
+  document.getElementById('btnAnalyze').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('file', state.selectedFile);
+
+    const res = await fetch(`${state.apiUrl}/analyze`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    state.analysisData = data;
+
+    document.getElementById('af-shape').textContent  = data.face_shape || '—';
+    document.getElementById('af-tone').textContent   = data.skin_tone || '—';
+    document.getElementById('af-length').textContent = data.current_hair_length || '—';
+    document.getElementById('af-color').textContent  = data.current_hair_color || '—';
+    document.getElementById('analysisCard').classList.add('visible');
+
+    // Auto-select recommended style
+    if (data.recommended_styles?.length) {
+      const best = data.recommended_styles[0];
+      const chip = document.querySelector(`[data-key="${best}"]`);
+      if (chip) selectStyle(best, chip);
+    }
+
+    setStatus('success', `Analysis complete — face shape: ${data.face_shape}`);
+    showToast(`Face shape detected: ${data.face_shape}`);
+  } catch (e) {
+    setStatus('error', `Analysis failed: ${e.message}`);
+    showToast(`Couldn't reach the API. Is the ngrok tunnel running?`, true);
+  } finally {
+    document.getElementById('btnAnalyze').disabled = false;
+  }
 }
 
-// ─── BADGES RENDER ────────────────────────────────────────────────────────────
-function renderBadges() {
-  const earned = Object.keys(State.earnedBadges).length;
-  document.getElementById('bdg-count').textContent = `${earned} of ${BADGES.length} earned`;
+// ── GENERATE ──────────────────────────────────────────────────────────────────
 
-  // level
-  const lv   = getLevel();
-  const prog = getLevelProgress();
-  const next = getLevelNext();
-  document.getElementById('level-name').textContent   = lv.name;
-  document.getElementById('level-fill').style.width   = prog + '%';
-  document.getElementById('level-xp-text').textContent =
-    next ? `${State.xp} / ${next.min} XP` : `${State.xp} XP — Max Level`;
+const PIPELINE_STEPS = [
+  'MediaPipe selfie segmentation (client-side)…',
+  'Building dual masks (BiSeNet + SAM2)…',
+  'Erasing hair region with LaMa…',
+  'Analysing style with Groq Vision…',
+  'Generating new hairstyle with SDXL…',
+  'Restoring original face…',
+];
 
-  const grid = document.getElementById('bdg-grid');
-  grid.innerHTML = '';
-  BADGES.forEach(b => {
-    const earnedDate = State.earnedBadges[b.id];
-    const card = document.createElement('div');
-    card.className = 'bdg-card' + (earnedDate ? ' earned' : '');
-    card.innerHTML = `
-      <div class="bdg-icon">${b.icon}</div>
-      <div class="bdg-name">${b.name}</div>
-      <div class="bdg-desc">${b.desc}</div>
-      ${earnedDate ? `<div class="bdg-date">${fmt(earnedDate)}</div>` : ''}
-    `;
-    grid.appendChild(card);
-  });
-}
+async function generateStyle() {
+  if (!state.selectedFile) return;
 
-function showBadgeUnlock(b) {
-  document.getElementById('bdg-unlock-ico').textContent  = b.icon;
-  document.getElementById('bdg-unlock-name').textContent = b.name;
-  document.getElementById('bdg-unlock-desc').textContent = b.desc + ` (+${b.xp} XP bonus)`;
-  document.getElementById('bdg-unlock').classList.add('show');
-}
+  if (!state.apiUrl) {
+    showToast('No API configured — running demo mode', false);
+    runDemoMode();
+    return;
+  }
 
-// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
-// scheduleNotifications removed — replaced by Cloudflare Worker push (PUSH_WORKER_URL)
+  showLoading(true);
+  document.getElementById('btnGenerate').disabled = true;
+  document.getElementById('pipelineLog').innerHTML = '';
+  document.getElementById('pipelineLog').classList.add('visible');
+  document.getElementById('comparePlaceholder').style.display = 'none';
 
-// ─── PUBLIC API (window.App) ──────────────────────────────────────────────────
-const App = {
-  async startCamera() {
-    showScreen('camera');
-    document.body.classList.remove('show-nav');
-    await startCameraInternal();
-  },
-
-  async handleUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    State.capturedBlob = file;
-    State.capturedDataURL = await new Promise(res => {
-      const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file);
-    });
-    App.submitToAPI();
-  },
-
-  async submitToAPI() {
-    showScreen('processing');
-    document.body.classList.remove('show-nav');
-    document.getElementById('proc-preview').src = State.capturedDataURL;
-
-    const stages = [
-      [5,  'Detecting face features…'],
-      [25, 'Analysing hair & skin tone…'],
-      [45, 'Segmenting hair region…'],
-      [65, 'Generating style options…'],
-      [85, 'Applying recommended look…'],
-      [98, 'Finishing up…'],
-    ];
-    let si = 0;
-    const progEl  = document.getElementById('prog-fill');
-    const stageEl = document.getElementById('proc-stage');
-    const progTimer = setInterval(() => {
-      if (si < stages.length) {
-        progEl.style.width  = stages[si][0] + '%';
-        stageEl.textContent = stages[si][1];
-        si++;
+  let stepIdx = 0;
+  const stepTimer = setInterval(() => {
+    if (stepIdx < PIPELINE_STEPS.length) {
+      document.getElementById('loadingStep').textContent = PIPELINE_STEPS[stepIdx];
+      logStep(PIPELINE_STEPS[stepIdx], 'running');
+      if (stepIdx > 0) {
+        const prev = document.getElementById('pipelineLog').children[stepIdx - 1];
+        if (prev) prev.className = 'log-step done';
       }
-    }, 2200);
-
-    try {
-      const form = new FormData();
-      form.append('file', State.capturedBlob, 'photo.jpg');
-
-      const res  = await fetch(API_BASE + '/analyze', { method:'POST', body:form });
-      const data = await res.json();
-
-      clearInterval(progTimer);
-      progEl.style.width = '100%';
-
-      State.apiResult = data;
-      State.styleImages = {};
-      State.currentStyleIdx = 0;
-
-      // track scan count
-      State.scanCount = (State.scanCount || 0) + 1;
-      save();
-      if (State.scanCount === 1) checkBadge('first_scan');
-      if (State.scanCount >= 5) checkBadge('scan_5');
-      awardXP(20, 'AI Scan complete');
-
-      App.showResults();
-    } catch(err) {
-      clearInterval(progTimer);
-      App.toast('Connection error — is the Kaggle server running?');
-      showScreen('welcome');
+      // Animate hero stages
+      const stages = ['hStage0','hStage1','hStage2','hStage3','hStage4','hStage5'];
+      stages.forEach((id, i) => document.getElementById(id).classList.toggle('active', i === stepIdx));
+      stepIdx++;
     }
-  },
+  }, 8000); // approximate per-stage timing
 
-  showResults() {
-    showScreen('results');
-    document.body.classList.add('show-nav');
-    document.querySelectorAll('.bnav-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-tryon').classList.add('active');
+  try {
+    const fd = new FormData();
+    fd.append('file', state.selectedFile);
+    if (state.selectedStyle) fd.append('style_key', state.selectedStyle);
+    fd.append('request', document.getElementById('customRequest').value);
+    fd.append('strength', document.getElementById('rStrength').value);
+    fd.append('guidance', document.getElementById('rGuidance').value);
+    fd.append('steps', document.getElementById('rSteps').value);
 
-    const d = State.apiResult;
-    document.getElementById('res-style-name').textContent = (d.recommended_styles && d.recommended_styles[0]) || STYLES[0];
-    document.getElementById('a-shape').textContent  = d.face_shape          || '—';
-    document.getElementById('a-skin').textContent   = d.skin_tone           || '—';
-    document.getElementById('a-color').textContent  = d.current_hair_color  || '—';
-    document.getElementById('a-length').textContent = d.current_hair_length || '—';
-    document.getElementById('a-reason').textContent = d.style_reasoning     || 'Style selected based on your facial proportions and features.';
-    document.getElementById('cmp-before').src = State.capturedDataURL;
-    document.getElementById('cmp-after').src  = d.result_image || '';
-
-    // chips
-    const chipsEl = document.getElementById('style-chips');
-    chipsEl.innerHTML = '';
-    const styles = d.recommended_styles || STYLES;
-    styles.forEach((s, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'chip' + (i === 0 ? ' active' : '');
-      chip.textContent = s;
-      chip.onclick = () => App.tryStyle(s, i, chip);
-      chipsEl.appendChild(chip);
-    });
-
-    initSlider();
-  },
-
-  async tryStyle(style, idx, chipEl) {
-    if (State.currentStyleIdx === idx) return;
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    chipEl.classList.add('active');
-    State.currentStyleIdx = idx;
-
-    // track styles tried
-    State.stylesTriedCount = (State.stylesTriedCount || 0) + 1;
-    save();
-    if (State.stylesTriedCount >= 3) checkBadge('styles_3');
-
-    if (State.styleImages[style]) {
-      document.getElementById('cmp-after').src = State.styleImages[style];
-      document.getElementById('res-style-name').textContent = style;
-      return;
+    // Attach MediaPipe mask if available and enabled
+    const mpEnabled = document.getElementById('mpEnabled')?.checked;
+    if (mpEnabled && state.mpMaskB64) {
+      fd.append('mp_mask_b64', state.mpMaskB64);
+      logStep('MediaPipe mask attached (Layer 3)', 'done');
     }
 
-    document.getElementById('style-loading').classList.add('show');
-    try {
-      const form = new FormData();
-      form.append('file', State.capturedBlob, 'photo.jpg');
-      form.append('style', style);
-      const res  = await fetch(API_BASE + '/inpaint', { method:'POST', body:form });
-      const data = await res.json();
-      State.styleImages[style] = data.result_image;
-      document.getElementById('cmp-after').src = data.result_image;
-      document.getElementById('res-style-name').textContent = style;
-    } catch(e) {
-      App.toast('Could not load style — check server');
+    // Agents toggle
+    const useAgents = document.getElementById('useAgents')?.checked;
+    fd.append('use_agents', useAgents ? 'true' : 'false');
+
+    const res = await fetch(`${state.apiUrl}/inpaint`, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${res.status}`);
     }
-    document.getElementById('style-loading').classList.remove('show');
-  },
+    const data = await res.json();
 
-  saveResult() {
-    const link = document.createElement('a');
-    link.href     = document.getElementById('cmp-after').src;
-    link.download = 'elume-result.jpg';
-    link.click();
-    State.savedCount = (State.savedCount || 0) + 1;
-    save();
-    checkBadge('saved');
-    awardXP(10, 'Result saved');
-    App.toast('Saved to gallery ✦');
-  },
+    clearInterval(stepTimer);
+    showLoading(false);
 
-  goRoutine() {
-    App.nav('routine');
-  },
+    // Mark all steps done
+    Array.from(document.getElementById('pipelineLog').children).forEach(c => c.className = 'log-step done');
+    document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'));
 
-  nav(tab) {
-    const screenMap = { tryon:'results', routine:'routine', badges:'badges' };
-    const target = State.apiResult ? (screenMap[tab] || 'welcome') : (tab === 'tryon' ? 'welcome' : screenMap[tab]);
-    showScreen(target);
-    document.body.classList.add('show-nav');
-    document.querySelectorAll('.bnav-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('active');
-    if (tab === 'routine') renderRoutine();
-    if (tab === 'badges')  renderBadges();
-  },
+    const resultSrc = `data:image/jpeg;base64,${data.result_image}`;
+    state.resultImageB64 = data.result_image;
 
-  switchCamera() {
-    State.facingMode = State.facingMode === 'user' ? 'environment' : 'user';
-    cancelCountdown();
-    startCameraInternal();
-  },
+    displayResult(resultSrc, data);
+    setStatus('success', `Done — ${STYLES[data.primary_style_key]?.name || data.primary_style_key}`);
+    showToast('Your new hairstyle is ready!');
 
-  async toggleTorch() {
-    if (!State.camStream) return;
-    const track = State.camStream.getVideoTracks()[0];
-    try {
-      State.torchOn = !State.torchOn;
-      await track.applyConstraints({ advanced:[{ torch: State.torchOn }] });
-      document.getElementById('btn-torch').style.opacity = State.torchOn ? '1' : '0.5';
-    } catch(e) {
-      App.toast('Torch not available');
-    }
-  },
-
-  manualCapture() {
-    if (State.countdownActive) return;
-    cancelCountdown();
-    startCountdown();
-  },
-
-  async requestNotifications() {
-    if (!('Notification' in window)) { App.toast('Notifications not supported on this browser'); return; }
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      App.toast('Install the app first, then enable reminders'); return;
-    }
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { App.toast('Enable notifications in your phone settings'); return; }
-    try {
-      const keyRes  = await fetch(PUSH_WORKER_URL + '/vapid-public');
-      const keyData = await keyRes.json();
-      const vapidKey = urlBase64ToUint8Array(keyData.publicKey);
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:vapidKey });
-      const subJSON = sub.toJSON();
-      const userId  = getOrCreateUserId();
-      await fetch(PUSH_WORKER_URL + '/subscribe', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          user_id:  userId,
-          endpoint: subJSON.endpoint,
-          p256dh:   subJSON.keys.p256dh,
-          auth:     subJSON.keys.auth,
-          hair_type: State.apiResult?.hair_type || null,
-        }),
-      });
-      App.toast('Reminders enabled ✦');
-      document.getElementById('notif-banner').classList.add('hide');
-    } catch(err) {
-      console.error('Push subscribe failed:', err);
-      App.toast('Could not enable notifications — try reinstalling the app');
-    }
-  },
-
-  bookSalon() {
-    State.salonCount = (State.salonCount || 0) + 1;
-    save();
-    checkBadge('salon');
-    awardXP(15, 'Salon booked');
-    window.open('https://www.google.com/search?q=hair+salon+near+me', '_blank');
-  },
-
-
-  installPWA() {
-    if (window._deferredInstallPrompt) {
-      window._deferredInstallPrompt.prompt();
-      window._deferredInstallPrompt.userChoice.then(choice => {
-        if (choice.outcome === 'accepted') {
-          App.toast('ÉLUME installed ✦');
-          document.getElementById('btn-install').classList.remove('show');
-        }
-        window._deferredInstallPrompt = null;
-      });
-    }
-  },
-
-  closeBadgeUnlock() {
-    document.getElementById('bdg-unlock').classList.remove('show');
-  },
-
-  toast(msg, duration = 2500) {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), duration);
-  },
-};
-
-window.App = App;
-
-
-// ─── INSTALL PROMPT ───────────────────────────────────────────────────────────
-window._deferredInstallPrompt = null;
-
-// Android / Chrome — capture the beforeinstallprompt event
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  window._deferredInstallPrompt = e;
-  document.getElementById('btn-install').classList.add('show');
-  document.getElementById('ios-tip').classList.remove('show');
-});
-
-// iOS detection — show the share tip instead
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-const isStandalone = window.navigator.standalone === true;
-if (isIOS && !isStandalone) {
-  document.getElementById('ios-tip').classList.add('show');
-  document.getElementById('btn-install').classList.remove('show');
+  } catch (e) {
+    clearInterval(stepTimer);
+    showLoading(false);
+    setStatus('error', e.message);
+    showToast(`Generation failed: ${e.message}`, true);
+    document.getElementById('comparePlaceholder').style.display = '';
+    document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'));
+  } finally {
+    document.getElementById('btnGenerate').disabled = false;
+  }
 }
 
-// Hide install UI once actually installed
-window.addEventListener('appinstalled', () => {
-  document.getElementById('btn-install').classList.remove('show');
-  document.getElementById('ios-tip').classList.remove('show');
-  App.toast('ÉLUME installed ✦');
-});
+function displayResult(resultSrc, data) {
+  const origSrc = state.originalDataUrl;
 
-// ─── BOOT ─────────────────────────────────────────────────────────────────────
-load();
-renderBadges();
+  // SBS
+  const sbsBefore = document.getElementById('sbsBefore');
+  const sbsAfter  = document.getElementById('sbsAfter');
+  sbsBefore.src = origSrc; sbsBefore.style.display = 'block';
+  sbsAfter.src  = resultSrc; sbsAfter.style.display = 'block';
+  document.getElementById('sbsBeforeLabel').style.display = 'block';
+  document.getElementById('sbsAfterLabel').style.display = 'block';
+  document.getElementById('sbsStyleLabel').textContent = STYLES[data.primary_style_key]?.name || data.primary_style_key || 'Result';
 
-// Register service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Slider
+  document.getElementById('sliderBefore').src = origSrc;
+  document.getElementById('sliderAfter').src  = resultSrc;
+
+  // Stylist reasoning
+  if (data.reasoning) {
+    document.getElementById('reasoningText').textContent = data.reasoning;
+    const tags = document.getElementById('reasoningTags');
+    tags.innerHTML = (data.recommended_styles || []).map(s =>
+      `<span class="reasoning-tag">${STYLES[s]?.name || s}</span>`
+    ).join('');
+    if (data.face_shape) tags.innerHTML += `<span class="reasoning-tag" style="color:var(--gold)">${data.face_shape} face</span>`;
+    document.getElementById('reasoningCard').classList.add('visible');
+  }
+
+  // ── Planner card ─────────────────────────────────────────────
+  const plan = data.plan;
+  if (plan) {
+    document.getElementById('plannerConfidence').textContent =
+      `${Math.round((plan.confidence || 0) * 100)}% confidence`;
+    document.getElementById('plannerReasoning').textContent =
+      plan.reasoning || '';
+    document.getElementById('plannerParams').innerHTML = [
+      `<span class="agent-param">Strength<span>${plan.strength}</span></span>`,
+      `<span class="agent-param">Guidance<span>${plan.guidance}</span></span>`,
+      `<span class="agent-param">Steps<span>${plan.steps}</span></span>`,
+      `<span class="agent-param">Dilate<span>${plan.dilate_px}px</span></span>`,
+      `<span class="agent-param">Style<span>${STYLES[plan.style_key]?.name || plan.style_key}</span></span>`,
+    ].join('');
+    document.getElementById('plannerCard').classList.add('visible');
+  }
+
+  // ── Reviewer card ────────────────────────────────────────────
+  const review = data.review;
+  if (review && typeof review.quality_score !== 'undefined') {
+    const score = review.quality_score ?? 0;
+    document.getElementById('reviewerScore').textContent = `${score.toFixed(1)} / 10`;
+    document.getElementById('reviewerScore').style.color =
+      score >= 7 ? 'var(--success)' : score >= 5 ? 'var(--gold)' : 'var(--error)';
+
+    document.getElementById('reviewerChecks').innerHTML = `
+      <div class="reviewer-check">
+        <div class="check-dot ${review.style_applied ? 'pass' : 'fail'}"></div>
+        Style applied
+      </div>
+      <div class="reviewer-check">
+        <div class="check-dot ${review.face_preserved ? 'pass' : 'fail'}"></div>
+        Face preserved
+      </div>
+    `;
+
+    document.getElementById('reviewerSuggestion').textContent =
+      review.suggestion || '';
+
+    const issues = review.issues || [];
+    document.getElementById('reviewerIssues').innerHTML = issues.map(i =>
+      `<div class="reviewer-issue">${i}</div>`
+    ).join('');
+
+    document.getElementById('reviewerCard').classList.add('visible');
+  }
+
+  document.getElementById('btnDownload').classList.add('visible');
+  document.getElementById('comparePlaceholder').style.display = 'none';
+}
+
+// ── DEMO MODE (no backend) ────────────────────────────────────────────────────
+
+function runDemoMode() {
+  if (!state.originalDataUrl) return;
+
+  showLoading(true);
+  document.getElementById('comparePlaceholder').style.display = 'none';
+  document.getElementById('pipelineLog').classList.add('visible');
+  document.getElementById('pipelineLog').innerHTML = '';
+
+  let i = 0;
+  const t = setInterval(() => {
+    if (i < PIPELINE_STEPS.length) {
+      logStep(PIPELINE_STEPS[i], i === 0 ? 'running' : 'pending');
+      document.getElementById('loadingStep').textContent = PIPELINE_STEPS[i];
+      i++;
+    } else {
+      clearInterval(t);
+      showLoading(false);
+      Array.from(document.getElementById('pipelineLog').children).forEach(c => c.className = 'log-step done');
+
+      // Demo: show original twice with a note
+      displayResult(state.originalDataUrl, {
+        primary_style_key: state.selectedStyle || 'bob_classic',
+        recommended_styles: ['bob_classic', 'lob_wavy', 'curtain_bangs'],
+        face_shape: 'oval (demo)',
+        reasoning: 'This is a demo preview — connect your Kaggle ngrok tunnel to generate real AI hairstyle transformations. The pipeline would normally run BiSeNet, SAM2, LaMa, Groq, and SDXL on your portrait.',
+      });
+      setStatus('success', 'Demo mode — connect API for real results');
+      showToast('Demo mode: connect your Élume backend for real transformations');
+    }
+  }, 1200);
+}
+
+// ── SLIDER COMPARE ────────────────────────────────────────────────────────────
+
+function switchView(view, el) {
+  state.view = view;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+
+  document.getElementById('sbsView').classList.toggle('active', view === 'sbs');
+  document.getElementById('sliderView').classList.toggle('active', view === 'slider');
+}
+
+function startSliderDrag(e) {
+  state.isDraggingSlider = true;
+  e.preventDefault?.();
+}
+
+function onSliderDrag(e) {
+  if (!state.isDraggingSlider) return;
+  e.preventDefault?.();
+  const sliderView = document.getElementById('sliderView');
+  const rect = sliderView.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+  setSliderPos(pct);
+}
+
+function moveSliderTo(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = ((e.clientX - rect.left) / rect.width) * 100;
+  setSliderPos(pct);
+}
+
+function setSliderPos(pct) {
+  state.sliderPos = pct;
+  document.getElementById('sliderHandle').style.left = `${pct}%`;
+  document.getElementById('sliderClip').style.width = `${pct}%`;
+}
+
+// ── DOWNLOAD ──────────────────────────────────────────────────────────────────
+
+function downloadResult() {
+  if (!state.resultImageB64) return;
+  const a = document.createElement('a');
+  a.href = `data:image/jpeg;base64,${state.resultImageB64}`;
+  a.download = `elume-${state.selectedStyle || 'result'}-${Date.now()}.jpg`;
+  a.click();
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+
+function setStatus(type, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot';
+  if (type === 'running') dot.classList.add('running');
+  if (type === 'success') dot.classList.add('success');
+  if (type === 'error')   dot.classList.add('error');
+  txt.textContent = text;
+}
+
+function showLoading(on) {
+  const ov = document.getElementById('loadingOverlay');
+  ov.classList.toggle('active', on);
+  if (on) setStatus('running', 'Pipeline running…');
+}
+
+function logStep(text, cls) {
+  const log = document.getElementById('pipelineLog');
+  const line = document.createElement('div');
+  line.className = `log-step ${cls}`;
+  const prefix = cls === 'done' ? '✓ ' : cls === 'running' ? '▶ ' : '· ';
+  line.textContent = prefix + text;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' toast-error' : '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+
+function openConfig() {
+  document.getElementById('apiUrlInput').value = state.apiUrl;
+  document.getElementById('configModal').classList.add('open');
+}
+
+function saveConfig() {
+  const url = document.getElementById('apiUrlInput').value.trim().replace(/\/$/, '');
+  if (!url) return;
+  state.apiUrl = url;
+  localStorage.setItem('elume_api_url', url);
+  document.getElementById('configModal').classList.remove('open');
+  updateConnectionBadge();
+  checkConnection();
+}
+
+function skipConfig() {
+  document.getElementById('configModal').classList.remove('open');
+}
+
+function updateConnectionBadge() {
+  const badge = document.getElementById('connectionBadge');
+  if (state.apiUrl) {
+    badge.textContent = 'Connected';
+    badge.style.color = 'var(--success)';
+    badge.style.borderColor = 'var(--success)';
+  } else {
+    badge.textContent = 'Offline';
+    badge.style.color = 'var(--gold)';
+    badge.style.borderColor = 'var(--gold-dim)';
+  }
+}
+
+async function checkConnection() {
+  if (!state.apiUrl) return;
+  try {
+    const res = await fetch(`${state.apiUrl}/health`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`Connected — running on ${data.device || 'GPU'}`);
+      document.getElementById('btnAnalyze').disabled = !state.selectedFile;
+    }
+  } catch {
+    showToast('Could not reach API — check your ngrok URL', true);
+    const badge = document.getElementById('connectionBadge');
+    badge.textContent = 'Unreachable';
+    badge.style.color = 'var(--error)';
+    badge.style.borderColor = 'var(--error)';
+  }
 }
 </script>
 </body>
